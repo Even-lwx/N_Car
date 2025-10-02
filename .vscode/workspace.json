@@ -1,0 +1,25 @@
+{
+    "extensions.ignoreRecommendations": true,
+    "C_Cpp.default.configurationProvider": "",
+    "C_Cpp.default.compilerPath": "",
+    "C_Cpp.default.cStandard": "",
+    "C_Cpp.default.cppStandard": "",
+    "C_Cpp.default.intelliSenseMode": "",
+    "C_Cpp.vcFormat.newLine.beforeOpenBrace.namespace": "ignore",
+    "C_Cpp.vcFormat.newLine.beforeOpenBrace.type": "ignore",
+    "C_Cpp.vcFormat.newLine.beforeOpenBrace.function": "ignore",
+    "C_Cpp.vcFormat.newLine.beforeOpenBrace.block": "ignore",
+    "problems.showCurrentInStatus": false,
+    "files.exclude": {
+        "**/Debug/**": true,
+        "**/.settings/**": true,
+        "**/*.o": true,
+        "**/*.elf": true,
+        "**/*.map": true
+    },
+    "search.exclude": {
+        "**/Debug": true,
+        "**/.settings": true,
+        "**/libraries/infineon_libraries": true
+    }
+}

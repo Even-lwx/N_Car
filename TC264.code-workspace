@@ -1,0 +1,21 @@
+{
+  "folders": [
+    {
+      "path": "."
+    }
+  ],
+  "settings": {
+    "C_Cpp.errorSquiggles": "disabled",
+    "C_Cpp.intelliSenseEngine": "disabled",
+    "C_Cpp.autocomplete": "disabled",
+    "problems.decorations.enabled": false,
+    "editor.showUnused": false,
+    "editor.parameterHints.enabled": false,
+    "C_Cpp.dimInactiveRegions": false,
+    "C_Cpp.enhancedColorization": "disabled"
+  },
+  "extensions": {
+    "recommendations": [],
+    "unwantedRecommendations": ["ms-vscode.cpptools-extension-pack"]
+  }
+}
