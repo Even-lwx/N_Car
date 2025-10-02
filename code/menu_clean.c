@@ -8,6 +8,7 @@
 #include "zf_device_ips114.h"
 #include "zf_driver_gpio.h"
 #include "zf_driver_delay.h"
+#include "zf_driver_timer.h"
 #include "menu.h"
 
 /**************** Function Declarations ****************/
@@ -114,11 +115,11 @@ uint32 uint32_step[] = {1, 10, 100, 1000};           // 4 steps for uint32
 // Parameter definitions for Example Menu
 CustomData example_data[] = {
     // address, type, name, step_array, step_len, step_num, digit_int, digit_point
-    {&example_float1, data_float_show, "Float Param 1", float1_step, 3, 0, 1, 2},
-    {&example_float2, data_float_show, "Float Param 2", float2_step, 2, 0, 1, 2},
-    {&example_int16_1, data_int16_show, "Int16 Param 1", int16_1_step, 3, 0, 3, 0},
-    {&example_int16_2, data_int16_show, "Int16 Param 2", int16_2_step, 2, 0, 3, 0},
-    {&example_uint32, data_uint32_show, "Uint32 Param", uint32_step, 4, 0, 5, 0}
+    {&example_float1, data_float_show, "Float Param 1", float1_step, 3, 0, 4, 4},
+    {&example_float2, data_float_show, "Float Param 2", float2_step, 2, 0, 4, 4},
+    {&example_int16_1, data_int16_show, "Int16 Param 1", int16_1_step, 3, 0, 4, 4},
+    {&example_int16_2, data_int16_show, "Int16 Param 2", int16_2_step, 2, 0, 4, 4},
+    {&example_uint32, data_uint32_show, "Uint32 Param", uint32_step, 4, 0, 4, 4}
 };
 
 // ===== Add your new menu parameters here =====
@@ -130,8 +131,8 @@ float motor_speed_step[] = {0.1f, 1.0f, 10.0f};
 int16 motor_duty_step[] = {10, 100, 1000};
 
 CustomData motor_data[] = {
-    {&motor_speed, data_float_show, "Motor Speed", motor_speed_step, 3, 0, 3, 1},
-    {&motor_duty, data_int16_show, "Motor Duty", motor_duty_step, 3, 0, 5, 0}
+    {&motor_speed, data_float_show, "Motor Speed", motor_speed_step, 3, 0, 4, 4},
+    {&motor_duty, data_int16_show, "Motor Duty", motor_duty_step, 3, 0, 4, 4}
 };
 
 // Page definitions
@@ -158,16 +159,47 @@ Page page_motor = {
     0                   // order
 };
 
-Page main_page = {
-    "Main Menu",        // name
-    NULL,               // data
-    2,                  // len (number of sub-menus) - CHANGED from 1 to 2
-    Menu,               // stage
-    NULL,               // back
-    {&page_example, &page_motor, NULL, NULL},  // enter - ADDED &page_motor
+/**************** 调试监控界面 ****************/
+// 这个页面用于实时显示传感器数据（只读显示，不可调参）
+
+// 创建只读的显示数据数组（不需要step数组，因为不可调）
+CustomData debug_data[] = {
+    // 复用现有变量作为显示数据，digit_int=3, digit_point=2
+    {&motor_speed, data_float_show, "Speed", NULL, 0, 0, 3, 2},
+    {&motor_duty, data_int16_show, "Duty", NULL, 0, 0, 3, 2},
+    {&example_float1, data_float_show, "Param", NULL, 0, 0, 3, 2},
+    // 如果需要显示更多传感器数据，在这里添加
+};
+
+Page page_debug = {
+    "Debug Monitor",    // name
+    debug_data,         // data (只读显示数据)
+    3,                  // len (显示3个数据)
+    Menu,               // stage (使用Menu模式，像Example Menu一样)
+    NULL,               // back (will be set in Menu_Init)
+    {NULL, NULL, NULL, NULL},  // enter
     {NULL},             // content
     0                   // order
 };
+
+/**************** 主菜单 ****************/
+// 参数自动管理：
+//   - 上电自动从 Flash 加载参数
+//   - 退出调参模式时自动保存到 Flash
+
+Page main_page = {
+    "Main Menu",        // name
+    NULL,               // data
+    3,                  // len (3个子菜单：Example, Motor, Debug)
+    Menu,               // stage
+    NULL,               // back
+    {&page_example, &page_motor, &page_debug, NULL},
+    {NULL},             // content
+    0                   // order
+};
+
+/**************** 参数保存/加载功能实现 ****************/
+#include "param_save.h"
 
 /**************** Menu Control Functions ****************/
 
@@ -181,7 +213,8 @@ void Menu_Init(void)
     
     // Set up menu relationships (back pointers)
     page_example.back = &main_page;
-    page_motor.back = &main_page;  // ADD this line for new menu
+    page_motor.back = &main_page;
+    page_debug.back = &main_page;
     
     // Set current menu to main page
     Now_Menu = &main_page;
@@ -232,6 +265,9 @@ void Menu_Back(void)
     else if(Now_Menu->stage == Change)
     {
         // Exit parameter adjustment mode - return to Menu stage
+        // 自动保存参数到Flash
+        Param_Save_All();
+        
         ips_clear();  // Clear screen immediately
         Now_Menu->stage = Menu;
         need_refresh = 1;  // Request screen refresh when exiting Change mode
@@ -513,7 +549,18 @@ void Menu_Show(void)
         {
             CustomData *param = &Now_Menu->data[Now_Menu->order];
             
+            // 检查是否有step数组（判断是否可调参）
+            if(param->step == NULL || param->step_len == 0)
+            {
+                // 无step数组，说明是只读参数，不允许进入调参模式
+                // 自动返回Menu模式
+                Now_Menu->stage = Menu;
+                need_refresh = 1;
+                return;  // 直接返回，下次循环重新绘制
+            }
+            
             // Display title (Y=0, same as menu title)
+            show_string(1, 0, "ADJUST MODE");
             show_string(1, 0, "ADJUST MODE");
             
             // Display parameter name (Y=2, with spacing)

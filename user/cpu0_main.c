@@ -66,6 +66,10 @@ void all_init(void)
     pid_init(); // 初始化简化PID控制系统
     pit_ms_init(CCU60_CH0, 1);   // 1ms定时器用于PID控制
     pit_ms_init(CCU60_CH1, 20);  // 20ms定时器用于按键扫描（长按检测）
+    
+    // 从 Flash 加载保存的参数（必须在 menu_init 之前）
+    Param_Load_All();
+    
     menu_init(); // 初始化菜单系统
 }
 int core0_main(void)

@@ -43,6 +43,7 @@ typedef enum {
     Menu,           // Menu page
     Change,         // Parameter adjustment page
     Funtion,        // Function execution page
+    Debug,          // Debug/Monitor page (real-time sensor data)
 } Page_Type;
 
 /**
