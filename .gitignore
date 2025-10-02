@@ -1,0 +1,168 @@
+# TC264 AURIX项目 .gitignore 文件
+# 忽略编译和构建过程产生的临时文件
+
+# ========================= 编译输出文件 =========================
+# Debug目录及其所有内容
+Debug/
+Release/
+Build/
+
+# 编译生成的对象文件和依赖文件
+*.o
+*.obj
+*.elf
+*.hex
+*.map
+*.lst
+*.lsl.tmp
+*.d
+*.dep
+*.mdf
+
+# 汇编源文件（编译器生成的）
+*.src
+*.asm
+
+# 链接器文件
+*.out
+*.axf
+
+# Makefile相关
+makefile
+sources.mk
+subdir.mk
+objects.mk
+
+# 编译优化文件
+*.opt
+
+# 符号文件和调试信息
+*.sym
+*.dis
+*.dump
+
+# ========================= IDE和工具文件 =========================
+# Eclipse项目文件（保留项目配置但忽略临时文件）
+.metadata/
+.recommenders/
+.settings/.jsdtscope
+.settings/language.settings.xml
+RemoteSystemsTempFiles/
+
+# VS Code临时文件
+.vscode/settings.json
+.vscode/launch.json
+.vscode/tasks.json
+.vscode/c_cpp_properties.json
+.vscode/*.log
+
+# AURIX Development Studio临时文件
+*.tmp
+*.temp
+*.cache
+.project~
+.cproject~
+
+# TASKING工具链相关
+*.lkv
+*.dbg
+
+# JLink调试器文件
+JLinkLog.txt
+JLinkSettings.ini
+
+# 其他调试工具
+*.ini
+*.trace
+
+# ========================= 系统和编辑器临时文件 =========================
+# Windows系统文件
+Thumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# macOS系统文件
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Linux系统文件
+*~
+.nfs*
+
+# 编辑器临时文件
+*.swp
+*.swo
+*~
+.#*
+#*#
+
+# ========================= 日志和备份文件 =========================
+# 日志文件
+*.log
+*.LOG
+
+# 备份文件
+*.bak
+*.backup
+*.old
+
+# ========================= 压缩和打包文件 =========================
+*.zip
+*.rar
+*.7z
+*.tar
+*.gz
+*.tgz
+
+# ========================= 自定义忽略 =========================
+# 用户自定义配置文件（如果不想同步个人设置）
+# user_config.h
+# personal_settings.txt
+
+# 测试数据和临时测试文件
+test_data/
+temp_test/
+test_output/
+
+# 文档生成的临时文件
+doc/html/
+doc/latex/
+Doxygen/html/
+Doxygen/latex/
+
+# Python编译文件（如果有Python脚本工具）
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+*.pyd
+.Python
+*.so
+
+# ========================= 芯片和调试相关 =========================
+# UDE调试器
+*.dav
+*.wsx
+*.udepb
+
+# Lauterbach Trace32
+*.cmm.bak
+practice/
+
+# 烧录工具
+*.flash
+
+# ========================= 保留重要文件说明 =========================
+# 以下文件应该被保留在版本控制中：
+# - 源代码文件 (*.c, *.h)
+# - 项目配置文件 (.project, .cproject)
+# - 链接脚本文件 (*.lsl，但不包括 *.lsl.tmp)
+# - 说明文档 (*.md, *.txt)
+# - 批处理脚本 (*.bat)
+# - 工作区文件 (*.code-workspace)
+
+# ========================= 例外规则 =========================
+# 如果某些Debug配置文件需要保留，可以使用 ! 来排除
+# !Debug/configuration.xml
+# !Debug/settings.ini
