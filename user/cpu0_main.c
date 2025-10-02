@@ -59,18 +59,18 @@ void all_init(void)
     debug_init(); // 初始化默认调试串口
 
     // 初始化各个模块
-    ips114_init(); // 初始化IPS114液晶屏
-    imu_init();    // 初始化IMU陀螺仪
-    servo_init();  // 初始化舵机
-    motor_init(); // 初始化电机和编码器
-    pid_init(); // 初始化简化PID控制系统
-    pit_ms_init(CCU60_CH0, 1);   // 1ms定时器用于PID控制
-    pit_ms_init(CCU60_CH1, 20);  // 20ms定时器用于按键扫描（长按检测）
-    
+    ips114_init();              // 初始化IPS114液晶屏
+    imu_init();                 // 初始化IMU陀螺仪
+    servo_init();               // 初始化舵机
+    motor_init();               // 初始化电机和编码器
+    pid_init();                 // 初始化简化PID控制系统
+    pit_ms_init(CCU60_CH0, 1);  // 1ms定时器用于PID控制
+    pit_ms_init(CCU60_CH1, 20); // 20ms定时器用于按键扫描（长按检测）
+
     // 从 Flash 加载保存的参数（必须在 menu_init 之前）
     Param_Load_All();
-    
-    menu_init(); // 初始化菜单系统
+
+    Menu_Init(); // 初始化菜单系统
 }
 int core0_main(void)
 {
@@ -80,13 +80,13 @@ int core0_main(void)
 
     while (1)
     {
-        // 按键扫描已在定时器中断(cc60_pit_ch1_isr)中处理，无需在主循环调用
-        
+
         // 显示菜单
         menu_update();
-        
+
+
         // 减少CPU占用
-        system_delay_ms(20);
+        system_delay_ms(10);
     }
 }
 

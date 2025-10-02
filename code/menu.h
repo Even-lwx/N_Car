@@ -1,11 +1,11 @@
-/************************************************************************
-  Copyright (C), 2024 , ASTA ASC.
-  File name:        menu.h
-  Author: CANG_HAI  Version:  2.00 (Cleaned)   Date: 2025/10/02
-  Description:      Clean menu framework header file
-                    Adapted for IPS114 display (240x135 pixels)
-                    All business logic removed
-**************************************************************************/
+#/************************************************************************
+ * 版权所有 (C), 2024 , ASTA ASC.
+ * 文件名:        menu.h
+ * 作者: CANG_HAI  版本: 2.00 (已清理)   日期: 2025/10/02
+ * 描述:          精简后的菜单框架头文件
+ *                适配 IPS114 显示屏（240x135 像素）
+ *                已移除所有业务逻辑，仅保留框架代码
+ *************************************************************************/
 #ifndef _MENU_H_
 #define _MENU_H_
 
@@ -13,124 +13,126 @@
 #include "zf_device_ips114.h"
 #include "zf_driver_gpio.h"
 
-/**************** GPIO Pin Definitions ****************/
-#define KEY1_PIN    P20_6   // KEY1 - UP
-#define KEY2_PIN    P20_7   // KEY2 - DOWN
-#define KEY3_PIN    P11_2   // KEY3 - OK (Enter/Confirm)
-#define KEY4_PIN    P11_3   // KEY4 - BACK (Return)
+/**************** GPIO 引脚定义 ****************/
+#define KEY1_PIN P20_6 // KEY1 - 上（UP）
+#define KEY2_PIN P20_7 // KEY2 - 下（DOWN）
+#define KEY3_PIN P11_2 // KEY3 - 确认（OK / Enter）
+#define KEY4_PIN P11_3 // KEY4 - 返回（BACK / Return）
 
-/**************** Key Code Definitions ****************/
-#define KEY_NONE    0
-#define KEY_UP      1
-#define KEY_DOWN    2
-#define KEY_OK      3
-#define KEY_BACK    4
+/**************** 按键代码定义 ****************/
+#define KEY_NONE 0
+#define KEY_UP 1
+#define KEY_DOWN 2
+#define KEY_OK 3
+#define KEY_BACK 4
 
-/**************** Long Press Configuration ****************/
-#define LONG_PRESS_CNT   15     // 长按阈值：连续检测15次认为长按（约300ms）
-#define REPEAT_INTERVAL  3      // 长按后每3次循环触发一次（约60ms间隔）
+/**************** 长按配置 ****************/
+#define LONG_PRESS_CNT 30 // 长按阈值：连续检测15次认为长按（约300ms）
+#define REPEAT_INTERVAL 3 // 长按后每3次循环触发一次（约60ms间隔）
 
-/**************** Font Configuration ****************/
-#define FONT_W      8   // Character width
-#define FONT_H      8   // Character height
+/**************** 字体配置 ****************/
+#define FONT_W 8 // 字符宽度
+#define FONT_H 8 // 字符高度
 
-/**************** Enumerations ****************/
+/**************** 枚举类型 ****************/
 
 /**
- * @brief Page type enumeration
+ * @brief 页面类型枚举
  */
-typedef enum {
-    Menu,           // Menu page
-    Change,         // Parameter adjustment page
-    Funtion,        // Function execution page
-    Debug,          // Debug/Monitor page (real-time sensor data)
+typedef enum
+{
+    Menu,    // 菜单页面
+    Change,  // 参数调整页面
+    Funtion, // 功能执行页面
+    Debug,   // 调试/监视页面（实时传感器或状态数据显示）
 } Page_Type;
 
 /**
- * @brief Data type enumeration
+ * @brief 数据类型枚举
  */
-typedef enum {
-    data_float_show = 0,    // Float
-    data_int16_show = 1,    // 16-bit integer
-    data_uint32_show = 2,   // 32-bit unsigned integer
-    data_int_show = 3,      // Integer
+typedef enum
+{
+    data_float_show = 0,  // 浮点数
+    data_int16_show = 1,  // 16位有符号整数
+    data_uint32_show = 2, // 32位无符号整数
+    data_int_show = 3,    // 一般整数
 } Data_Type;
 
-/**************** Structure Definitions ****************/
+/**************** 结构体定义 ****************/
 
 /**
- * @brief Custom data structure
+ * @brief 自定义参数数据结构
  */
-typedef struct {
-    void *address;          // Data address
-    Data_Type type;         // Data type
-    char name[20];          // Parameter name
-    void *step;             // Step array pointer
-    uint8 step_len;         // Step array length
-    uint8 step_num;         // Current step index
-    uint8 digit_int;        // Integer digits
-    uint8 digit_point;      // Decimal digits
+typedef struct
+{
+    void *address;     // 数据地址
+    Data_Type type;    // 数据类型
+    char name[20];     // 参数名称（字符串）
+    void *step;        // 步进数组指针
+    uint8 step_len;    // 步进数组长度
+    uint8 step_num;    // 当前步进索引
+    uint8 digit_int;   // 整数位数显示
+    uint8 digit_point; // 小数位数显示
 } CustomData;
 
 /**
- * @brief Page structure (forward declaration)
+ * @brief 页面结构体（前置声明）
  */
 typedef struct Page Page;
 
 /**
- * @brief Page structure
+ * @brief 页面结构体定义
  */
-struct Page {
-    char name[20];          // Page name
-    CustomData *data;       // Data array pointer
-    uint8 len;              // Data array length
-    Page_Type stage;        // Page type
-    Page *back;             // Parent page
-    Page *enter[4];         // Child pages (max 4)
-    union {
-        void (*function)(void);     // Function pointer
+struct Page
+{
+    char name[20];    // 页面名称
+    CustomData *data; // 指向参数数组的指针
+    uint8 len;        // 参数数组长度
+    Page_Type stage;  // 页面类型
+    Page *back;       // 返回的父页面指针
+    Page *enter[4];   // 子页面指针（最多4个）
+    union
+    {
+        void (*function)(void); // 功能函数指针
     } content;
-    uint8 order;            // Current selection index
+    uint8 order; // 当前选中索引
 };
 
-/**************** Global Variable Declarations ****************/
-extern Page *Now_Menu;          // Current menu pointer
+/**************** 全局变量声明 ****************/
+extern Page *Now_Menu; // 当前菜单指针
 
-extern int16 add_mode[5];       // Step arrays
-extern float add_float[5];
-extern int16 add_int16[5];
-extern uint32 add_uint32[5];
-extern int add_int[5];
+extern int16 add_mode[5];    // 通用步进数组（示例）
+extern float add_float[5];   // 浮点类型步进数组
+extern int16 add_int16[5];   // int16 步进数组
+extern uint32 add_uint32[5]; // uint32 步进数组
+extern int add_int[5];       // int 步进数组
 
-/**************** Function Declarations ****************/
+/**************** 函数声明 ****************/
 
-// Key scan functions
-void Key_Init(void);            // Key initialization
-uint8 Key_Scan(void);           // Key scan with debounce
+// 按键扫描相关函数
+void Key_Init(void);  // 按键初始化
+uint8 Key_Scan(void); // 按键扫描（含消抖）
 
-// Menu operation functions
-void Menu_Init(void);           // Menu initialization
-void Menu_Enter(void);          // Enter key operation
-void Menu_Back(void);           // Back key operation
-void Menu_Up(void);             // Up key operation
-void Menu_Down(void);           // Down key operation
-void Menu_Left(void);           // Left key operation (enter adjustment)
-void Menu_Right(void);          // Right key operation (execute function)
-void Menu_Show(void);           // Menu display
-void Key_operation(uint8 key);  // Key handler
+// 菜单操作相关函数
+void Menu_Init(void);          // 菜单初始化
+void Menu_Enter(void);         // 确认/进入按键处理
+void Menu_Back(void);          // 返回按键处理
+void Menu_Up(void);            // 向上选择
+void Menu_Down(void);          // 向下选择
+void Menu_Left(void);          // 左键处理（进入调整/减少）
+void Menu_Right(void);         // 右键处理（执行/增加）
+void Menu_Show(void);          // 菜单渲染显示
+void Key_operation(uint8 key); // 按键分发处理函数
+void menu_update(void);        // 菜单更新函数（主循环调用）
 
-// Display functions
+// 显示封装函数
 void show_string(uint16 x, uint16 y, const char *str);
 void show_int(uint16 x, uint16 y, int32 value, uint8 num);
 void show_float(uint16 x, uint16 y, float value, uint8 num, uint8 pointnum);
 void show_uint(uint16 x, uint16 y, uint32 value, uint8 num);
 
-// Utility functions
-void Screen_Clear(void);
-void Screen_SetColor(uint16 pen_color, uint16 bg_color);
-
-/**************** Backward Compatibility Macros ****************/
-#define menu_init()     Menu_Init()
-#define menu_update()   Menu_Show()
+// 工具/辅助函数
+void Screen_Clear(void);                                 // 清屏
+void Screen_SetColor(uint16 pen_color, uint16 bg_color); // 设置前景/背景色
 
 #endif // _MENU_H_
