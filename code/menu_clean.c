@@ -36,66 +36,60 @@ void Key_Init(void)
 }
 
 /**
- * @brief Scan keys with debounce
+ * @brief Scan keys with long press detection
  * @return Key code (KEY_NONE, KEY_UP, KEY_DOWN, KEY_OK, KEY_BACK)
+ * @note 长按会自动连续触发，实现快速上下移动、快速调参
  */
 uint8 Key_Scan(void)
 {
-    static uint8 key_state = 0;  // 0: idle, 1: pressed, 2: wait release
+    static uint8 press_cnt = 0;        // 按键按下计数器
+    static uint8 last_key = KEY_NONE;  // 上次检测到的按键
     uint8 key_value = KEY_NONE;
+    uint8 current_key = KEY_NONE;
     
-    if(key_state == 0)  // Idle state, check for key press
+    // 检测当前哪个按键被按下（不延时，在中断中已有固定20ms周期）
+    if(gpio_get_level(KEY1_PIN) == GPIO_LOW)
+        current_key = KEY_UP;
+    else if(gpio_get_level(KEY2_PIN) == GPIO_LOW)
+        current_key = KEY_DOWN;
+    else if(gpio_get_level(KEY3_PIN) == GPIO_LOW)
+        current_key = KEY_OK;
+    else if(gpio_get_level(KEY4_PIN) == GPIO_LOW)
+        current_key = KEY_BACK;
+    
+    // 按键处理逻辑
+    if(current_key != KEY_NONE)  // 有按键按下
     {
-        // KEY1 - UP
-        if(gpio_get_level(KEY1_PIN) == GPIO_LOW)
+        if(current_key == last_key)  // 同一个按键持续按下
         {
-            system_delay_ms(10);  // Debounce delay
-            if(gpio_get_level(KEY1_PIN) == GPIO_LOW)
+            press_cnt++;
+            
+            // 第1次检测到：立即触发（短按响应）
+            if(press_cnt == 1)
             {
-                key_value = KEY_UP;
-                key_state = 1;
+                key_value = current_key;
+            }
+            // 达到长按阈值后：开始连续触发
+            else if(press_cnt >= LONG_PRESS_CNT)
+            {
+                // 每隔REPEAT_INTERVAL次触发一次（实现自动连续操作）
+                if((press_cnt - LONG_PRESS_CNT) % REPEAT_INTERVAL == 0)
+                {
+                    key_value = current_key;
+                }
             }
         }
-        // KEY2 - DOWN
-        else if(gpio_get_level(KEY2_PIN) == GPIO_LOW)
+        else  // 不同的按键
         {
-            system_delay_ms(10);
-            if(gpio_get_level(KEY2_PIN) == GPIO_LOW)
-            {
-                key_value = KEY_DOWN;
-                key_state = 1;
-            }
-        }
-        // KEY3 - OK (Confirm/Enter)
-        else if(gpio_get_level(KEY3_PIN) == GPIO_LOW)
-        {
-            system_delay_ms(10);
-            if(gpio_get_level(KEY3_PIN) == GPIO_LOW)
-            {
-                key_value = KEY_OK;
-                key_state = 1;
-            }
-        }
-        // KEY4 - BACK (Return)
-        else if(gpio_get_level(KEY4_PIN) == GPIO_LOW)
-        {
-            system_delay_ms(10);
-            if(gpio_get_level(KEY4_PIN) == GPIO_LOW)
-            {
-                key_value = KEY_BACK;
-                key_state = 1;
-            }
+            press_cnt = 1;
+            last_key = current_key;
+            key_value = current_key;  // 立即触发新按键
         }
     }
-    else if(key_state == 1)  // Key pressed, wait for release
+    else  // 没有按键按下
     {
-        if(gpio_get_level(KEY1_PIN) == GPIO_HIGH && 
-           gpio_get_level(KEY2_PIN) == GPIO_HIGH &&
-           gpio_get_level(KEY3_PIN) == GPIO_HIGH &&
-           gpio_get_level(KEY4_PIN) == GPIO_HIGH)
-        {
-            key_state = 0;  // Return to idle state
-        }
+        press_cnt = 0;
+        last_key = KEY_NONE;
     }
     
     return key_value;

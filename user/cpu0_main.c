@@ -64,33 +64,25 @@ void all_init(void)
     servo_init();  // 初始化舵机
     motor_init(); // 初始化电机和编码器
     pid_init(); // 初始化简化PID控制系统
-    pit_ms_init(CCU60_CH0, 1);
+    pit_ms_init(CCU60_CH0, 1);   // 1ms定时器用于PID控制
+    pit_ms_init(CCU60_CH1, 20);  // 20ms定时器用于按键扫描（长按检测）
     menu_init(); // 初始化菜单系统
 }
 int core0_main(void)
 {
-    uint8 key_value = 0;  // 按键值
-
     all_init(); // 初始化所有模块
 
     cpu_wait_event_ready(); // 等待所有核心初始化完毕
 
     while (1)
     {
-        // 扫描按键
-        key_value = Key_Scan();
-        
-        // 处理按键操作
-        if(key_value != 0)
-        {
-            Key_operation(key_value);
-        }
+        // 按键扫描已在定时器中断(cc60_pit_ch1_isr)中处理，无需在主循环调用
         
         // 显示菜单
         menu_update();
         
         // 减少CPU占用
-        system_delay_ms(10);
+        system_delay_ms(20);
     }
 }
 

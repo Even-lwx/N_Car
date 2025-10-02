@@ -26,6 +26,10 @@
 #define KEY_OK      3
 #define KEY_BACK    4
 
+/**************** Long Press Configuration ****************/
+#define LONG_PRESS_CNT   15     // 长按阈值：连续检测15次认为长按（约300ms）
+#define REPEAT_INTERVAL  3      // 长按后每3次循环触发一次（约60ms间隔）
+
 /**************** Font Configuration ****************/
 #define FONT_W      8   // Character width
 #define FONT_H      8   // Character height

@@ -33,9 +33,7 @@
  * 2022-09-15       pudding            first version
  ********************************************************************************************************************/
 
-#include "isr_config.h"
-#include "isr.h"
-#include "pid.h" // 添加PID头文件
+#include "zf_common_headfile.h"
 
 // 对于TC系列默认是不支持中断嵌套的，希望支持中断嵌套需要在中断内使用 interrupt_global_enable(0); 来开启中断嵌套
 // 简单点说实际上进入中断后TC系列的硬件自动调用了 interrupt_global_disable(); 来拒绝响应任何的中断，因此需要我们自己手动调用 interrupt_global_enable(0); 来开启中断的响应。
@@ -54,7 +52,16 @@ IFX_INTERRUPT(cc60_pit_ch1_isr, 0, CCU6_0_CH1_ISR_PRIORITY)
     interrupt_global_enable(0); // 开启中断嵌套
     pit_clear_flag(CCU60_CH1);
 
+    // 按键扫描（建议定时器周期设置为20ms）
+    static uint8 last_key = KEY_NONE;  // 记录上次按键值
+    uint8 key = Key_Scan();            // 扫描按键
     
+    // 只有按键值改变时才处理（避免重复触发）
+    if(key != KEY_NONE && key != last_key)
+    {
+        Key_operation(key);  // 处理按键操作
+    }
+    last_key = key;
 }
 
 IFX_INTERRUPT(cc61_pit_ch0_isr, 0, CCU6_1_CH0_ISR_PRIORITY)
