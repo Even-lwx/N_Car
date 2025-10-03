@@ -22,17 +22,27 @@ PID_Controller angle_pid = {
 
 // 速度环PID控制器
 PID_Controller speed_pid = {
-    .kp = -0.0f,
+    .kp = 0.0f,
     .ki = 0.0f,
     .kd = 0.0f,
     .max_integral = 100.0f,
     .max_output = 1000.0f // 速度环输出作为角度环的目标角度偏移(度)
 };
 
+// 行进轮速度环PID控制器
+PID_Controller drive_speed_pid = {
+    .kp = -1.0f,
+    .ki = 0.0f,
+    .kd = 0.0f,
+    .max_integral = 100.0f,
+    .max_output = 10000.0f // 行进轮速度环输出PWM值
+};
+
 // 目标值
-float target_gyro_rate = 0.0f; // 目标角速度
-float target_angle = 0.0f;     // 目标角度
-float target_speed = 0.0f;     // 目标速度
+float target_gyro_rate = 0.0f;    // 目标角速度
+float target_angle = 0.0f;        // 目标角度
+float target_speed = 0.0f;        // 目标速度
+float target_drive_speed = 10.0f; // 行进轮目标速度
 
 // 控制标志
 bool enable = true; // 使能标志，默认启用
@@ -151,17 +161,24 @@ void control(void)
 
     imu_update();
 
-    // 速度环控制（10ms周期，每10个5ms周期执行一次）
+    // 速度环控制（10ms周期，每10个1ms周期执行一次）
     if (count % 10 == 0)
     {
         motor_encoder_update();
         speed_loop_control();
     }
 
-    // 角度环控制（5ms周期，每3个5ms周期执行一次）
+    // 角度环控制（5ms周期，每5个1ms周期执行一次）
     if (count % 5 == 0)
     {
         angle_loop_control(0); // 速度环输出通过desired_angle传递
+    }
+
+    // 行进轮速度环控制（20ms周期，每20个1ms周期执行一次）
+    if (count % 20 == 0)
+    {
+
+        drive_speed_loop_control();
     }
 
     // 角速度环控制（1ms周期，每次都执行）
@@ -195,6 +212,11 @@ void pid_init(void)
     speed_pid.integral = 0;
     speed_pid.output = 0;
 
+    drive_speed_pid.error = 0;
+    drive_speed_pid.last_error = 0;
+    drive_speed_pid.integral = 0;
+    drive_speed_pid.output = 0;
+
     // 初始化滤波器状态
     filtered_gyro_y = 0.0f;
     filtered_motor_output = 0.0f;
@@ -212,6 +234,7 @@ void pid_reset(void)
     target_angle = 0.0f;
     target_speed = 0.0f;
     target_gyro_rate = 0.0f;
+    target_drive_speed = 0.0f;
 }
 
 /**
@@ -228,6 +251,14 @@ void set_target_speed(float speed)
 void set_target_angle(float angle)
 {
     target_angle = angle;
+}
+
+/**
+ * @brief 设置行进轮目标速度
+ */
+void set_target_drive_speed(float speed)
+{
+    target_drive_speed = speed;
 }
 
 /**
@@ -258,6 +289,16 @@ void set_speed_pid_params(float kp, float ki, float kd)
     speed_pid.kp = kp;
     speed_pid.ki = ki;
     speed_pid.kd = kd;
+}
+
+/**
+ * @brief 设置行进轮速度环PID参数
+ */
+void set_drive_speed_pid_params(float kp, float ki, float kd)
+{
+    drive_speed_pid.kp = kp;
+    drive_speed_pid.ki = ki;
+    drive_speed_pid.kd = kd;
 }
 
 /**
@@ -318,4 +359,17 @@ void get_pid_status(float *gyro_error, float *angle_error, float *speed_error,
         *angle_output = angle_pid.output;
     if (speed_output)
         *speed_output = speed_pid.output;
+}
+
+/**
+ * @brief 行进轮速度环控制
+ * @note 独立的速度环，使用encoder[1]作为速度反馈，输出PWM控制行进轮电机
+ */
+void drive_speed_loop_control(void)
+{
+    // 速度环PID计算
+    float drive_pwm_output = pid_calculate(&drive_speed_pid, target_drive_speed, (float)encoder[1]);
+
+    // 控制行进轮电机
+    drive_wheel_control((int16)drive_pwm_output);
 }

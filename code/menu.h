@@ -95,7 +95,8 @@ struct Page
     {
         void (*function)(void); // 功能函数指针
     } content;
-    uint8 order; // 当前选中索引
+    uint8 order;        // 当前选中索引
+    uint8 scroll_offset; // 滚动偏移量（首个显示项的索引）
 };
 
 /**************** 全局变量声明 ****************/

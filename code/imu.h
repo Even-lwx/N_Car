@@ -69,9 +69,10 @@ typedef struct
 extern imu_data_t imu_data; // IMU数据结构体
 
 // IMU校准参数（可在菜单中调整）
-extern uint8 gyro_ration; // 陀螺仪比例系数
-extern uint8 acc_ration;  // 加速度计比例系数
-extern float call_cycle;  // 调用周期（单位：秒）
+extern uint8 gyro_ration;    // 陀螺仪比例系数
+extern uint8 acc_ration;     // 加速度计比例系数
+extern float call_cycle;     // 调用周期（单位：秒）
+extern uint32 machine_angle; // 机械中值
 
 // *************************** 函数声明 ***************************
 uint8 imu_init(void);    // IMU初始化函数

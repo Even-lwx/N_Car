@@ -15,11 +15,19 @@
 #define PARAM_FLASH_SECTOR      0           // 使用扇区0
 #define PARAM_FLASH_PAGE        0           // 使用页0
 #define MAX_PARAM_COUNT         100         // 最大支持100个参数
+#define PARAM_MAGIC_NUMBER      0x12345678  // 魔术字，用于校验数据有效性
+
+/**************** 参数项结构 ****************/
+typedef struct {
+    uint32 name_hash;   // 参数名称的哈希值（用于标识参数）
+    uint32 value;       // 参数值
+} ParamItem;
 
 /**************** 参数存储结构 ****************/
 typedef struct {
+    uint32 magic;                       // 魔术字
     uint32 param_count;                 // 实际参数数量
-    uint32 data[MAX_PARAM_COUNT];       // 参数数据（统一按uint32存储）
+    ParamItem items[MAX_PARAM_COUNT];   // 参数项数组
 } FlashParamData;
 
 /**************** 函数声明 ****************/

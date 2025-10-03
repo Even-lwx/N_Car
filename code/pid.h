@@ -37,10 +37,12 @@ typedef struct
 extern PID_Controller gyro_pid;  // 角速度环PID
 extern PID_Controller angle_pid; // 角度环PID
 extern PID_Controller speed_pid; // 速度环PID
+extern PID_Controller drive_speed_pid; // 行进轮速度环PID
 
 extern float target_angle;     // 目标角度
 extern float target_speed;     // 目标速度
 extern float target_gyro_rate; // 目标角速度
+extern float target_drive_speed; // 行进轮目标速度
 
 extern float filtered_angle; // 滤波后的角度
 extern float filtered_speed; // 滤波后的速度
@@ -66,9 +68,11 @@ void control(void);
 
 void set_target_speed(float speed);
 void set_target_angle(float angle);
+void set_target_drive_speed(float speed);
 void set_gyro_pid_params(float kp, float ki, float kd);
 void set_angle_pid_params(float kp, float ki, float kd);
 void set_speed_pid_params(float kp, float ki, float kd);
+void set_drive_speed_pid_params(float kp, float ki, float kd);
 
 // 滤波参数设置函数
 void set_gyro_filter_coeff(float coeff);
@@ -81,5 +85,6 @@ float get_angle_filter_coeff(void);
 float get_encoder_speed(void);
 void get_pid_status(float *gyro_error, float *angle_error, float *speed_error,
                     float *gyro_output, float *angle_output, float *speed_output);
+void drive_speed_loop_control(void);
 
 #endif

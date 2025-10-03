@@ -9,7 +9,7 @@ imu_data_t imu_data = {0}; // IMU数据结构体
 static int16 gyro_x_offset = -2;
 static int16 gyro_y_offset = 11;
 static int16 gyro_z_offset = 5;
-static uint32 machine_angle = 500;
+uint32 machine_angle = 500;  // 机械中值（去掉static，允许外部访问）
 
 // 一阶互补滤波参数（只保留必要变量）
 static float angle_pitch_temp = 0.0f;

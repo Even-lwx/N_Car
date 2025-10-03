@@ -8,6 +8,9 @@
 #define SERVO_MOTOR_L_MAX (50)  // 定义主板上舵机活动范围 角度
 #define SERVO_MOTOR_R_MAX (150) // 定义主板上舵机活动范围 角度
 
+// 全局变量声明
+extern float servo_motor_duty; // 舵机当前角度
+
 // 舵机初始化
 void servo_init(void);
 // 设置舵机角度

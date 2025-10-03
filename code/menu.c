@@ -7,6 +7,9 @@
 #include "menu.h"
 #include "zf_common_headfile.h"
 #include "pid.h"
+#include "imu.h"
+#include "motor.h"
+#include "servo.h"
 /**************** 函数声明 ****************/
 void ips_clear(void);
 void show_string(uint16 x, uint16 y, const char *str);
@@ -142,40 +145,36 @@ Page page_example = {
     .enter = {NULL},
     .content = {NULL},
     .order = 0,
+    .scroll_offset = 0,
 };
 
 //============================================================
-// 2. 电机控制菜单 - Motor Control Menu
+// 2. 舵机控制菜单 - Servo Control Menu
 //============================================================
-// 2.1 参数变量定义
-float motor_speed = 0.0f;
-int16 motor_duty = 0;
+// 2.1 步进数组定义
+float servo_angle_step[] = {0.5f, 1.0f, 5.0f}; // 舵机角度步进
 
-// 2.2 步进数组定义
-float motor_speed_step[] = {0.1f, 1.0f, 10.0f}; // 3 个步进档位
-int16 motor_duty_step[] = {10, 100, 1000};      // 3 个步进档位
-
-// 2.3 参数配置数组
-CustomData motor_data[] = {
+// 2.2 参数配置数组
+CustomData servo_data[] = {
     // 变量地址          类型              显示名称         步进数组           步进数  索引  整数位  小数位
-    {&motor_speed, data_float_show, "Motor Speed", motor_speed_step, 3, 0, 4, 4},
-    {&motor_duty, data_int16_show, "Motor Duty", motor_duty_step, 3, 0, 4, 4},
+    {&servo_motor_duty, data_float_show, "Servo Angle", servo_angle_step, 3, 0, 4, 1},
 };
 
-// 2.4 页面定义
-Page page_motor = {
-    .name = "Motor Control",
-    .data = motor_data,
-    .len = 2,
+// 2.3 页面定义
+Page page_servo = {
+    .name = "Servo Control",
+    .data = servo_data,
+    .len = 1,
     .stage = Menu,
     .back = NULL, // Menu_Init 中设置
     .enter = {NULL},
     .content = {NULL},
     .order = 0,
+    .scroll_offset = 0,
 };
 
 //============================================================
-// 3. PID参数菜单 - PID Parameters
+// 3. PID参数菜单 - PID Parameters (三级菜单结构)
 //============================================================
 // 说明：调整三个串级PID控制器的参数
 // - 角速度环PID (gyro_pid)  : 最内环，直接控制电机输出
@@ -183,46 +182,113 @@ Page page_motor = {
 // - 速度环PID   (speed_pid) : 最外环，输出作为角度环目标偏移
 
 // 3.1 步进数组定义（统一的PID参数步进）
-float pid_kp_step[] = {0.01f, 0.1f, 1.0f};      // Kp步进
-float pid_ki_step[] = {0.01f, 0.1f, 1.0f};      // Ki步进
-float pid_kd_step[] = {0.001f, 0.01f, 0.1f};    // Kd步进
-float pid_limit_step[] = {1.0f, 10.0f, 100.0f}; // 限幅步进
+float pid_kp_step[] = {0.01f, 0.1f, 1.0f, 10.0f, 100.0f}; // Kp步进
+float pid_ki_step[] = {0.01f, 0.1f, 1.0f, 10.0f, 100.0f}; // Ki步进
+float pid_kd_step[] = {0.01f, 0.1f, 1.0f, 10.0f, 100.0f}; // Kd步进
+float pid_limit_step[] = {1.0f, 10.0f, 100.0f};           // 限幅步进
 
-// 3.2 参数配置数组
-CustomData pid_data[] = {
-    // -------- 角速度环PID --------
+// 3.2 角速度环PID参数
+CustomData gyro_pid_data[] = {
     // 变量地址                 类型              显示名称         步进数组        步进数  索引  整数位  小数位
-    {&gyro_pid.kp, data_float_show, "Gyro Kp", pid_kp_step, 3, 0, 4, 3},
-    {&gyro_pid.ki, data_float_show, "Gyro Ki", pid_ki_step, 3, 0, 4, 3},
-    {&gyro_pid.kd, data_float_show, "Gyro Kd", pid_kd_step, 3, 0, 4, 4},
-    {&gyro_pid.max_integral, data_float_show, "Gyro MaxI", pid_limit_step, 3, 0, 5, 1},
-    {&gyro_pid.max_output, data_float_show, "Gyro MaxOut", pid_limit_step, 3, 0, 5, 1},
-
-    // -------- 角度环PID --------
-    {&angle_pid.kp, data_float_show, "Angle Kp", pid_kp_step, 3, 0, 4, 3},
-    {&angle_pid.ki, data_float_show, "Angle Ki", pid_ki_step, 3, 0, 4, 3},
-    {&angle_pid.kd, data_float_show, "Angle Kd", pid_kd_step, 3, 0, 4, 4},
-    {&angle_pid.max_integral, data_float_show, "Angle MaxI", pid_limit_step, 3, 0, 5, 1},
-    {&angle_pid.max_output, data_float_show, "Angle MaxOut", pid_limit_step, 3, 0, 5, 1},
-
-    // -------- 速度环PID --------
-    {&speed_pid.kp, data_float_show, "Speed Kp", pid_kp_step, 3, 0, 4, 3},
-    {&speed_pid.ki, data_float_show, "Speed Ki", pid_ki_step, 3, 0, 4, 3},
-    {&speed_pid.kd, data_float_show, "Speed Kd", pid_kd_step, 3, 0, 4, 4},
-    {&speed_pid.max_integral, data_float_show, "Speed MaxI", pid_limit_step, 3, 0, 5, 1},
-    {&speed_pid.max_output, data_float_show, "Speed MaxOut", pid_limit_step, 3, 0, 5, 1},
+    {&gyro_pid.kp, data_float_show, "Kp", pid_kp_step, 5, 0, 4, 3},
+    {&gyro_pid.ki, data_float_show, "Ki", pid_ki_step, 5, 0, 4, 3},
+    {&gyro_pid.kd, data_float_show, "Kd", pid_kd_step, 5, 0, 4, 4},
+    {&gyro_pid.max_integral, data_float_show, "Max Integral", pid_limit_step, 3, 0, 5, 1},
+    {&gyro_pid.max_output, data_float_show, "Max Output", pid_limit_step, 3, 0, 5, 1},
 };
 
-// 3.3 页面定义
-Page page_pid = {
-    .name = "PID Params",
-    .data = pid_data,
-    .len = 15, // 3个PID控制器 × 5个参数 = 15
+Page page_gyro_pid = {
+    .name = "Gyro PID",
+    .data = gyro_pid_data,
+    .len = 5,
     .stage = Menu,
     .back = NULL, // Menu_Init 中设置
     .enter = {NULL},
     .content = {NULL},
     .order = 0,
+    .scroll_offset = 0,
+};
+
+// 3.3 角度环PID参数
+uint32 machine_angle_step[] = {1, 10, 100}; // 机械中值步进
+
+CustomData angle_pid_data[] = {
+    {&machine_angle, data_uint32_show, "Mech Zero", machine_angle_step, 3, 0, 5, 0},
+    {&angle_pid.kp, data_float_show, "Kp", pid_kp_step, 5, 0, 4, 3},
+    {&angle_pid.ki, data_float_show, "Ki", pid_ki_step, 5, 0, 4, 3},
+    {&angle_pid.kd, data_float_show, "Kd", pid_kd_step, 5, 0, 4, 4},
+    {&angle_pid.max_integral, data_float_show, "Max Integral", pid_limit_step, 3, 0, 5, 1},
+    {&angle_pid.max_output, data_float_show, "Max Output", pid_limit_step, 3, 0, 5, 1},
+};
+
+Page page_angle_pid = {
+    .name = "Angle PID",
+    .data = angle_pid_data,
+    .len = 6,
+    .stage = Menu,
+    .back = NULL, // Menu_Init 中设置
+    .enter = {NULL},
+    .content = {NULL},
+    .order = 0,
+    .scroll_offset = 0,
+};
+
+// 3.4 速度环PID参数
+CustomData speed_pid_data[] = {
+    {&speed_pid.kp, data_float_show, "Kp", pid_kp_step, 5, 0, 4, 3},
+    {&speed_pid.ki, data_float_show, "Ki", pid_ki_step, 5, 0, 4, 3},
+    {&speed_pid.kd, data_float_show, "Kd", pid_kd_step, 5, 0, 4, 4},
+    {&speed_pid.max_integral, data_float_show, "Max Integral", pid_limit_step, 3, 0, 5, 1},
+    {&speed_pid.max_output, data_float_show, "Max Output", pid_limit_step, 3, 0, 5, 1},
+};
+
+Page page_speed_pid = {
+    .name = "Speed PID",
+    .data = speed_pid_data,
+    .len = 5,
+    .stage = Menu,
+    .back = NULL, // Menu_Init 中设置
+    .enter = {NULL},
+    .content = {NULL},
+    .order = 0,
+    .scroll_offset = 0,
+};
+
+// 3.5 行进轮速度环PID参数
+float target_speed_step[] = {1.0f, 10.0f, 100.0f}; // 目标速度步进
+
+CustomData drive_speed_pid_data[] = {
+    {&target_drive_speed, data_float_show, "Target Speed", target_speed_step, 3, 0, 5, 1},
+    {&drive_speed_pid.kp, data_float_show, "Kp", pid_kp_step, 5, 0, 4, 3},
+    {&drive_speed_pid.ki, data_float_show, "Ki", pid_ki_step, 5, 0, 4, 3},
+    {&drive_speed_pid.kd, data_float_show, "Kd", pid_kd_step, 5, 0, 4, 4},
+    {&drive_speed_pid.max_integral, data_float_show, "Max Integral", pid_limit_step, 3, 0, 5, 1},
+    {&drive_speed_pid.max_output, data_float_show, "Max Output", pid_limit_step, 3, 0, 5, 1},
+};
+
+Page page_drive_speed_pid = {
+    .name = "Drive Speed PID",
+    .data = drive_speed_pid_data,
+    .len = 6,
+    .stage = Menu,
+    .back = NULL, // Menu_Init 中设置
+    .enter = {NULL},
+    .content = {NULL},
+    .order = 0,
+    .scroll_offset = 0,
+};
+
+// 3.6 PID主菜单页面（二级菜单，包含4个子菜单）
+Page page_pid = {
+    .name = "PID Params",
+    .data = NULL, // 无参数，仅作为子菜单容器
+    .len = 4,     // 4个子菜单
+    .stage = Menu,
+    .back = NULL, // Menu_Init 中设置
+    .enter = {&page_gyro_pid, &page_angle_pid, &page_speed_pid, &page_drive_speed_pid},
+    .content = {NULL},
+    .order = 0,
+    .scroll_offset = 0,
 };
 
 //============================================================
@@ -231,9 +297,10 @@ Page page_pid = {
 // 4.1 参数配置数组（复用现有变量，无需步进数组）
 CustomData debug_data[] = {
     // 变量地址          类型              显示名称      步进数组  步进数  索引  整数位  小数位
-    {&motor_speed, data_float_show, "Speed", NULL, 0, 0, 3, 2},
-    {&motor_duty, data_int16_show, "Duty", NULL, 0, 0, 3, 2},
-    {&example_float1, data_float_show, "Param", NULL, 0, 0, 3, 2},
+    {&encoder[0], data_int16_show, "Encoder0", NULL, 0, 0, 5, 0},
+    {&encoder[1], data_int16_show, "Encoder1", NULL, 0, 0, 5, 0},
+    {&imu_data.gyro_y, data_int16_show, "Gyro Y", NULL, 0, 0, 6, 0},
+    {&imu_data.pitch, data_float_show, "Pitch", NULL, 0, 0, 5, 2},
     // 可在此处添加更多传感器或状态数据
 };
 
@@ -241,12 +308,13 @@ CustomData debug_data[] = {
 Page page_debug = {
     .name = "Debug Monitor",
     .data = debug_data,
-    .len = 3,
+    .len = 4,
     .stage = Menu,
     .back = NULL, // Menu_Init 中设置
     .enter = {NULL},
     .content = {NULL},
     .order = 0,
+    .scroll_offset = 0,
 };
 
 //============================================================
@@ -262,9 +330,10 @@ Page main_page = {
     .len = 4,     // 4 个子菜单
     .stage = Menu,
     .back = NULL, // 主菜单无父菜单
-    .enter = {&page_example, &page_motor, &page_pid, &page_debug},
+    .enter = {&page_servo, &page_pid, &page_debug, NULL},
     .content = {NULL},
     .order = 0,
+    .scroll_offset = 0,
 };
 
 //============================================================
@@ -319,10 +388,18 @@ void Menu_Init(void)
     Key_Init();
 
     // 设置页面之间的关系（父页面指针）
-    page_example.back = &main_page;
-    page_motor.back = &main_page;
+    page_servo.back = &main_page;
     page_pid.back = &main_page;
     page_debug.back = &main_page;
+
+    // 设置PID子页面的父页面指针（三级菜单）
+    page_gyro_pid.back = &page_pid;
+    page_angle_pid.back = &page_pid;
+    page_speed_pid.back = &page_pid;
+    page_drive_speed_pid.back = &page_pid;
+
+    // 上电自动从Flash加载参数
+    Param_Load_All();
 
     // 设置当前菜单为主页面
     Now_Menu = &main_page;
@@ -341,7 +418,8 @@ void Menu_Enter(void)
             ips_clear(); // 立即清屏
             Now_Menu = Now_Menu->enter[Now_Menu->order];
             Now_Menu->order = 0;
-            need_refresh = 1; // 进入子菜单时请求刷新屏幕
+            Now_Menu->scroll_offset = 0; // 重置滚动偏移
+            need_refresh = 1;            // 进入子菜单时请求刷新屏幕
         }
     }
     else if (Now_Menu->stage == Change)
@@ -400,6 +478,13 @@ void Menu_Up(void)
         if (Now_Menu->order > 0)
         {
             Now_Menu->order--;
+
+            // 如果当前选中项在可见区域上方，向上滚动
+            if (Now_Menu->order < Now_Menu->scroll_offset)
+            {
+                Now_Menu->scroll_offset = Now_Menu->order;
+                need_refresh = 1; // 需要刷新屏幕
+            }
         }
         else
         {
@@ -407,6 +492,18 @@ void Menu_Up(void)
             if (Now_Menu->len > 0)
             {
                 Now_Menu->order = Now_Menu->len - 1;
+
+// 滚动到显示最后一项
+#define MAX_VISIBLE_ITEMS 6
+                if (Now_Menu->len > MAX_VISIBLE_ITEMS)
+                {
+                    Now_Menu->scroll_offset = Now_Menu->len - MAX_VISIBLE_ITEMS;
+                }
+                else
+                {
+                    Now_Menu->scroll_offset = 0;
+                }
+                need_refresh = 1; // 需要刷新屏幕
             }
         }
     }
@@ -418,6 +515,11 @@ void Menu_Up(void)
         case data_float_show:
             *(float *)Now_Menu->data[Now_Menu->order].address +=
                 ((float *)Now_Menu->data[Now_Menu->order].step)[Now_Menu->data[Now_Menu->order].step_num];
+            // 如果是舵机角度参数，实时更新舵机
+            if (Now_Menu->data[Now_Menu->order].address == &servo_motor_duty)
+            {
+                servo_set_angle(servo_motor_duty);
+            }
             break;
 
         case data_int16_show:
@@ -449,11 +551,21 @@ void Menu_Down(void)
         if (Now_Menu->len > 0 && Now_Menu->order < Now_Menu->len - 1)
         {
             Now_Menu->order++;
+
+// 如果当前选中项在可见区域下方，向下滚动
+#define MAX_VISIBLE_ITEMS 6
+            if (Now_Menu->order >= Now_Menu->scroll_offset + MAX_VISIBLE_ITEMS)
+            {
+                Now_Menu->scroll_offset = Now_Menu->order - MAX_VISIBLE_ITEMS + 1;
+                need_refresh = 1; // 需要刷新屏幕
+            }
         }
         else
         {
             // 循环到开头
             Now_Menu->order = 0;
+            Now_Menu->scroll_offset = 0;
+            need_refresh = 1; // 需要刷新屏幕
         }
     }
     else if (Now_Menu->stage == Change)
@@ -464,6 +576,11 @@ void Menu_Down(void)
         case data_float_show:
             *(float *)Now_Menu->data[Now_Menu->order].address -=
                 ((float *)Now_Menu->data[Now_Menu->order].step)[Now_Menu->data[Now_Menu->order].step_num];
+            // 如果是舵机角度参数，实时更新舵机
+            if (Now_Menu->data[Now_Menu->order].address == &servo_motor_duty)
+            {
+                servo_set_angle(servo_motor_duty);
+            }
             break;
 
         case data_int16_show:
@@ -587,66 +704,80 @@ void Menu_Show(void)
         // 显示菜单项（参数列表或子菜单）
         if (Now_Menu->data != NULL)
         {
-            // 参数菜单
-            for (uint8 i = 0; i < Now_Menu->len && i < 6; i++)
+// 参数菜单 - 支持滚动显示
+#define MAX_VISIBLE_ITEMS 6 // 屏幕最多显示6个菜单项
+
+            uint8 visible_count = 0; // 可见项计数
+            for (uint8 i = Now_Menu->scroll_offset; i < Now_Menu->len && visible_count < MAX_VISIBLE_ITEMS; i++)
             {
+                uint8 display_line = visible_count * 2 + 2; // 计算显示行号
+
                 // 绘制光标或清除光标位置
                 if (i == Now_Menu->order)
                 {
-                    show_string(0, i * 2 + 2, ">");
+                    show_string(0, display_line, ">");
                 }
                 else
                 {
-                    show_string(0, i * 2 + 2, " "); // 清除其他位置的光标
+                    show_string(0, display_line, " "); // 清除其他位置的光标
                 }
 
                 // 显示参数名称
-                show_string(1, i * 2 + 2, Now_Menu->data[i].name);
+                show_string(1, display_line, Now_Menu->data[i].name);
 
                 // 显示参数值
                 switch (Now_Menu->data[i].type)
                 {
                 case data_float_show:
-                    show_float(15, i * 2 + 2, *(float *)Now_Menu->data[i].address,
+                    show_float(15, display_line, *(float *)Now_Menu->data[i].address,
                                Now_Menu->data[i].digit_int, Now_Menu->data[i].digit_point);
                     break;
 
                 case data_int16_show:
-                    show_int(15, i * 2 + 2, *(int16 *)Now_Menu->data[i].address,
+                    show_int(15, display_line, *(int16 *)Now_Menu->data[i].address,
                              Now_Menu->data[i].digit_int);
                     break;
 
                 case data_int_show:
-                    show_int(15, i * 2 + 2, *(int *)Now_Menu->data[i].address,
+                    show_int(15, display_line, *(int *)Now_Menu->data[i].address,
                              Now_Menu->data[i].digit_int);
                     break;
 
                 case data_uint32_show:
-                    show_int(15, i * 2 + 2, *(uint32 *)Now_Menu->data[i].address,
+                    show_int(15, display_line, *(uint32 *)Now_Menu->data[i].address,
                              Now_Menu->data[i].digit_int);
                     break;
                 }
+
+                visible_count++;
             }
         }
         else
         {
-            // 子菜单列表
-            for (uint8 i = 0; i < Now_Menu->len && i < 6; i++)
+// 子菜单列表 - 支持滚动显示
+#define MAX_VISIBLE_ITEMS 6 // 屏幕最多显示6个菜单项
+
+            uint8 visible_count = 0; // 可见项计数
+            for (uint8 i = Now_Menu->scroll_offset; i < Now_Menu->len && visible_count < MAX_VISIBLE_ITEMS; i++)
             {
+                uint8 display_line = visible_count * 2 + 2; // 计算显示行号
+
                 // 绘制光标或清除光标位置
                 if (i == Now_Menu->order)
                 {
-                    show_string(0, i * 2 + 2, ">");
+                    show_string(0, display_line, ">");
                 }
                 else
                 {
-                    show_string(0, i * 2 + 2, " "); // 清除其他位置的光标
+                    show_string(0, display_line, " "); // 清除其他位置的光标
                 }
 
                 if (Now_Menu->enter[i] != NULL)
                 {
-                    show_string(1, i * 2 + 2, Now_Menu->enter[i]->name);
+                    show_string(1, display_line, Now_Menu->enter[i]->name);
                 }
+
+                visible_count++;
             }
         }
     }
