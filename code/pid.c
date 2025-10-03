@@ -48,15 +48,16 @@ float target_drive_speed = 10.0f; // 行进轮目标速度
 bool enable = true; // 使能标志，默认启用
 
 // 控制变量
-static uint32_t count = 0;             // 控制计数器
-static float desired_angle = 0.0f;     // 期望角度（速度环输出）
-static float angle_gyro_target = 0.0f; // 目标角速度（角度环输出）
+static uint32_t count = 0;                      // 控制计数器
+static float desired_angle = 0.0f;              // 期望角度（速度环输出）
+static float angle_gyro_target = 0.0f;          // 目标角速度（角度环输出）
+static uint32_t speed_integral_clear_count = 0; // 速度环积分清零计数器
 
 // 低通滤波器相关变量
 
-static float gyro_filter_coeff = 0.6f;     // 陀螺仪数据滤波系数 (0-1, 值越大滤波越强)
-static float output_filter_coeff = 0.4f;   // 输出滤波系数
-static float angle_filter_coeff = 0.6f;    // 角度环滤波系数 (0-1)
+static float gyro_filter_coeff = 1.0f;     // 陀螺仪数据滤波系数 (0-1, 值越大滤波越强)
+static float output_filter_coeff = 0.3f;   // 输出滤波系数
+static float angle_filter_coeff = 0.4f;    // 角度环滤波系数 (0-1)
 static float filtered_gyro_y = 0.0f;       // 滤波后的陀螺仪Y轴数据
 static float filtered_motor_output = 0.0f; // 滤波后的电机输出
 static float filtered_pitch = 0.0f;        // 滤波后的pitch角度
@@ -144,6 +145,14 @@ void angle_loop_control(int speed_control)
  */
 void speed_loop_control(void)
 {
+    speed_integral_clear_count++;
+
+    // 定时清零积分项（每1秒清零一次，10ms * 100 = 1000ms）
+    if (speed_integral_clear_count >= 100)
+    {
+        speed_pid.integral = 0;
+        speed_integral_clear_count = 0;
+    }
 
     // 速度环PID计算，输出作为角度偏移
     float speed_angle_offset = pid_calculate(&speed_pid, target_speed, encoder[0]);
@@ -161,8 +170,8 @@ void control(void)
 
     imu_update();
 
-    // 速度环控制（10ms周期，每10个1ms周期执行一次）
-    if (count % 10 == 0)
+    // 速度环控制（20ms周期，每20个1ms周期执行一次）
+    if (count % 20 == 0)
     {
         motor_encoder_update();
         speed_loop_control();
