@@ -1,10 +1,41 @@
 // *************************** 头文件包含 ***************************
 #include "motor.h"
+#include "buzzer.h"
 #include "zf_common_headfile.h"
+
 // *************************** 全局变量定义 ***************************
 int8 duty = 0;          // 当前占空比
 bool dir = true;        // 计数方向
 int16 encoder[2] = {0}; // 编码器值
+
+// *************************** 电机保护相关变量 ***************************
+// 保护触发原因枚举
+typedef enum {
+    PROTECT_NONE = 0,           // 无保护
+    PROTECT_STALL = 1,          // 堵转保护
+    PROTECT_DIR_CHANGE = 2      // 方向切换过快保护
+} protect_reason_t;
+
+// 电机保护状态结构体
+typedef struct {
+    int16 last_pwm;              // 上次PWM值
+    int8 last_dir;               // 上次方向 (1=正转, 0=反转, -1=未初始化)
+    uint32 last_dir_change_time; // 上次方向切换时间戳（毫秒）
+    uint32 stall_detect_count;   // 堵转检测计数器
+    bool is_protected;           // 是否处于保护状态
+    protect_reason_t protect_reason; // 保护触发原因
+    uint32 protect_start_time;   // 保护开始时间戳
+    int16 ramp_target_pwm;       // 渐变目标PWM
+    int16 ramp_current_pwm;      // 渐变当前PWM
+    uint8 ramp_step_count;       // 渐变步数计数器
+} motor_protection_t;
+
+static motor_protection_t motor_protect[2] = {
+    {0, -1, 0, 0, false, PROTECT_NONE, 0, 0, 0, 0}, // 动量轮
+    {0, -1, 0, 0, false, PROTECT_NONE, 0, 0, 0, 0}  // 行进轮
+};
+
+static uint32 system_time_ms = 0; // 系统时间计数器（毫秒）
 
 // *************************** 函数实现 ***************************
 
@@ -34,26 +65,11 @@ void motor_init(void)
 // 使用示例     momentum_wheel_control(5000);   // 向右转，PWM数值5000
 //              momentum_wheel_control(-3000);  // 向左转，PWM数值3000
 //              momentum_wheel_control(0);      // 停止
-// 备注信息     控制动量轮电机的转速和方向，直接传入PWM数值
+// 备注信息     控制动量轮电机的转速和方向，带堵转检测、方向切换保护、PWM渐变
 //-------------------------------------------------------------------------------------------------------------------
 void momentum_wheel_control(int16 pwm_value)
 {
-    // 限制PWM数值范围
-    if (pwm_value > MAX_PWM_VALUE)
-        pwm_value = MAX_PWM_VALUE;
-    if (pwm_value < -MAX_PWM_VALUE)
-        pwm_value = -MAX_PWM_VALUE;
-
-    if (pwm_value >= 0) // 正转或停止
-    {
-        pwm_set_duty(MOMENTUM_WHEEL_PWM, pwm_value); // 直接设置PWM数值
-        gpio_set_level(MOMENTUM_WHEEL_DIR, 1);       // 设置方向为正转
-    }
-    else // 反转
-    {
-        pwm_set_duty(MOMENTUM_WHEEL_PWM, -pwm_value); // 设置PWM数值（取绝对值）
-        gpio_set_level(MOMENTUM_WHEEL_DIR, 0);        // 设置方向为反转
-    }
+    motor_control_with_protection(0, pwm_value, MOMENTUM_WHEEL_PWM, MOMENTUM_WHEEL_DIR);
 }
 
 //-------------------------------------------------------------------------------------------------------------------
@@ -63,26 +79,11 @@ void momentum_wheel_control(int16 pwm_value)
 // 使用示例     drive_wheel_control(7500);   // 正转，PWM数值7500
 //              drive_wheel_control(-2000);  // 反转，PWM数值2000
 //              drive_wheel_control(0);      // 停止
-// 备注信息     控制行进轮电机的转速和方向，直接传入PWM数值
+// 备注信息     控制行进轮电机的转速和方向，带堵转检测、方向切换保护、PWM渐变
 //-------------------------------------------------------------------------------------------------------------------
 void drive_wheel_control(int16 pwm_value)
 {
-    // 限制PWM数值范围
-    if (pwm_value > MAX_PWM_VALUE)
-        pwm_value = MAX_PWM_VALUE;
-    if (pwm_value < -MAX_PWM_VALUE)
-        pwm_value = -MAX_PWM_VALUE;
-
-    if (pwm_value >= 0) // 正转或停止
-    {
-        pwm_set_duty(DRIVE_WHEEL_PWM, pwm_value); // 直接设置PWM数值
-        gpio_set_level(DRIVE_WHEEL_DIR, 1);       // 设置方向为正转
-    }
-    else // 反转
-    {
-        pwm_set_duty(DRIVE_WHEEL_PWM, -pwm_value); // 设置PWM数值（取绝对值）
-        gpio_set_level(DRIVE_WHEEL_DIR, 0);        // 设置方向为反转
-    }
+    motor_control_with_protection(1, pwm_value, DRIVE_WHEEL_PWM, DRIVE_WHEEL_DIR);
 }
 
 // 使用示例     motor_encoder_update();  // 在中断中调用
@@ -94,6 +95,228 @@ void motor_encoder_update(void)
     encoder[1] = encoder_get_count(ENCODER2_TIM); // 采集对应编码器数据
     encoder_clear_count(ENCODER1_TIM);            // 清除对应计数
     encoder_clear_count(ENCODER2_TIM);            // 清除对应计数
+}
+
+//-------------------------------------------------------------------------------------------------------------------
+// 函数简介     触发电机保护
+// 参数说明     motor_id: 电机ID (0=动量轮, 1=行进轮)
+//              reason: 保护原因
+// 返回参数     void
+// 备注信息     触发保护时会启动蜂鸣器报警
+//-------------------------------------------------------------------------------------------------------------------
+static void trigger_protection(uint8 motor_id, protect_reason_t reason)
+{
+    if(motor_id >= 2)
+        return;
+
+    motor_protection_t *protect = &motor_protect[motor_id];
+
+    // 设置保护状态
+    protect->is_protected = true;
+    protect->protect_reason = reason;
+    protect->protect_start_time = system_time_ms;
+
+    // 立即停止所有电机（统一保护：一个电机触发保护，所有电机都停止）
+    pwm_set_duty(MOMENTUM_WHEEL_PWM, 0);
+    pwm_set_duty(DRIVE_WHEEL_PWM, 0);
+
+    // 启动蜂鸣器报警（响3声，每声100ms，间隔100ms）
+    if(!buzzer_is_active())
+    {
+        buzzer_beep(BUZZER_BEEP_COUNT, BUZZER_BEEP_DURATION_MS, BUZZER_BEEP_INTERVAL_MS);
+    }
+}
+
+//-------------------------------------------------------------------------------------------------------------------
+// 函数简介     电机保护更新函数（需要定时调用，建议1ms周期）
+// 参数说明     void
+// 返回参数     void
+// 使用示例     motor_protection_update(); // 在1ms定时器中断中调用
+// 备注信息     负责更新系统时间、堵转检测、保护自动解除、蜂鸣器控制等
+//-------------------------------------------------------------------------------------------------------------------
+void motor_protection_update(void)
+{
+    system_time_ms++; // 更新系统时间
+
+    // 同步蜂鸣器时间并更新
+    buzzer_set_time(system_time_ms);
+    buzzer_update();
+
+    // 遍历两个电机进行保护检测
+    for(uint8 i = 0; i < 2; i++)
+    {
+        motor_protection_t *protect = &motor_protect[i];
+
+        // 如果处于保护状态，检查是否可以解除
+        if(protect->is_protected)
+        {
+            if((system_time_ms - protect->protect_start_time) >= PROTECTION_DISABLE_TIME_MS)
+            {
+                // 保护时间到，自动解除保护
+                protect->is_protected = false;
+                protect->protect_reason = PROTECT_NONE;
+                protect->stall_detect_count = 0;
+            }
+        }
+        else
+        {
+            // 堵转检测：PWM较高但编码器反馈很低
+            int16 abs_pwm = (protect->last_pwm >= 0) ? protect->last_pwm : -protect->last_pwm;
+            int16 abs_encoder = (encoder[i] >= 0) ? encoder[i] : -encoder[i];
+
+            if(abs_pwm > STALL_DETECT_PWM_THRESHOLD && abs_encoder < STALL_DETECT_ENCODER_THRESHOLD)
+            {
+                protect->stall_detect_count++;
+
+                // 连续检测到堵转超过阈值时间，触发保护
+                if(protect->stall_detect_count >= STALL_DETECT_TIME_MS)
+                {
+                    trigger_protection(i, PROTECT_STALL);
+                    protect->stall_detect_count = 0;
+                }
+            }
+            else
+            {
+                // 未检测到堵转，清零计数器
+                protect->stall_detect_count = 0;
+            }
+        }
+    }
+}
+
+//-------------------------------------------------------------------------------------------------------------------
+// 函数简介     重置电机保护状态
+// 参数说明     void
+// 返回参数     void
+// 使用示例     motor_reset_protection(); // 手动解除保护
+// 备注信息     用于手动解除所有电机的保护状态
+//-------------------------------------------------------------------------------------------------------------------
+void motor_reset_protection(void)
+{
+    for(uint8 i = 0; i < 2; i++)
+    {
+        motor_protect[i].is_protected = false;
+        motor_protect[i].protect_reason = PROTECT_NONE;
+        motor_protect[i].stall_detect_count = 0;
+    }
+
+    // 停止蜂鸣器
+    buzzer_stop();
+}
+
+//-------------------------------------------------------------------------------------------------------------------
+// 函数简介     查询电机是否处于保护状态
+// 参数说明     motor_id: 电机ID (0=动量轮, 1=行进轮)
+// 返回参数     bool: true=处于保护状态, false=正常
+// 使用示例     if(motor_is_stall_protected(0)) { ... }
+// 备注信息
+//-------------------------------------------------------------------------------------------------------------------
+bool motor_is_stall_protected(uint8 motor_id)
+{
+    if(motor_id >= 2)
+        return false;
+    return motor_protect[motor_id].is_protected;
+}
+
+//-------------------------------------------------------------------------------------------------------------------
+// 函数简介     电机控制内部函数（带保护）
+// 参数说明     motor_id: 电机ID (0=动量轮, 1=行进轮)
+//              pwm_value: 带符号的PWM数值
+//              pwm_pin: PWM输出引脚
+//              dir_pin: 方向控制引脚
+// 返回参数     void
+// 备注信息     内部函数，实现电机控制的保护逻辑
+//-------------------------------------------------------------------------------------------------------------------
+static void motor_control_with_protection(uint8 motor_id, int16 pwm_value, uint32 pwm_pin, uint32 dir_pin)
+{
+    if(motor_id >= 2)
+        return;
+
+    motor_protection_t *protect = &motor_protect[motor_id];
+
+    // 如果处于保护状态，强制输出0
+    if(protect->is_protected)
+    {
+        pwm_set_duty(pwm_pin, 0);
+        return;
+    }
+
+    // 限制PWM数值范围
+    if(pwm_value > MAX_PWM_VALUE)
+        pwm_value = MAX_PWM_VALUE;
+    if(pwm_value < -MAX_PWM_VALUE)
+        pwm_value = -MAX_PWM_VALUE;
+
+    // 判断当前方向
+    int8 current_dir = (pwm_value >= 0) ? 1 : 0;
+
+    // 检测方向是否改变
+    bool dir_changed = false;
+    if(protect->last_dir != -1 && protect->last_dir != current_dir)
+    {
+        dir_changed = true;
+    }
+
+    // 方向改变时的处理
+    if(dir_changed)
+    {
+        // 检查方向切换间隔
+        uint32 time_since_last_change = system_time_ms - protect->last_dir_change_time;
+
+        if(time_since_last_change < DIR_CHANGE_MIN_INTERVAL_MS)
+        {
+            // 方向切换过快，触发保护（统一处理：停止所有电机 + 蜂鸣器响3声）
+            trigger_protection(motor_id, PROTECT_DIR_CHANGE);
+            return;
+        }
+
+        // 方向切换允许，更新时间戳
+        protect->last_dir_change_time = system_time_ms;
+
+        // 启动PWM渐变过程
+        protect->ramp_target_pwm = (pwm_value >= 0) ? pwm_value : -pwm_value;
+        protect->ramp_current_pwm = 0;
+        protect->ramp_step_count = 0;
+    }
+
+    // 如果正在渐变过程中
+    if(protect->ramp_step_count < DIR_CHANGE_RAMP_STEPS)
+    {
+        protect->ramp_step_count++;
+
+        // 线性渐变
+        protect->ramp_current_pwm = (protect->ramp_target_pwm * protect->ramp_step_count) / DIR_CHANGE_RAMP_STEPS;
+
+        // 应用渐变后的PWM
+        if(pwm_value >= 0)
+        {
+            pwm_set_duty(pwm_pin, protect->ramp_current_pwm);
+            gpio_set_level(dir_pin, 1);
+        }
+        else
+        {
+            pwm_set_duty(pwm_pin, protect->ramp_current_pwm);
+            gpio_set_level(dir_pin, 0);
+        }
+    }
+    else
+    {
+        // 正常控制（非渐变）
+        if(pwm_value >= 0)
+        {
+            pwm_set_duty(pwm_pin, pwm_value);
+            gpio_set_level(dir_pin, 1);
+        }
+        else
+        {
+            pwm_set_duty(pwm_pin, -pwm_value);
+            gpio_set_level(dir_pin, 0);
+        }
+    }
+
+    // 更新状态
+    protect->last_pwm = pwm_value;
+    protect->last_dir = current_dir;
 }
 
 //

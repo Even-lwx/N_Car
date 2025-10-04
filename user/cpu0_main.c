@@ -58,6 +58,9 @@ void all_init(void)
     clock_init(); // 获取时钟频率<务必保留>
     debug_init(); // 初始化默认调试串口
 
+    // 蜂鸣器初始化（最早初始化，用于系统启动提示和保护报警）
+    buzzer_init();              // 初始化蜂鸣器
+
     // 初始化各个模块
     ips114_init();              // 初始化IPS114液晶屏
     imu_init();                 // 初始化IMU陀螺仪
