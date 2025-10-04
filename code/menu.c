@@ -188,6 +188,8 @@ float pid_kd_step[] = {0.01f, 0.1f, 1.0f, 10.0f, 100.0f}; // Kd步进
 float pid_limit_step[] = {1.0f, 10.0f, 100.0f};           // 限幅步进
 
 // 3.2 角速度环PID参数
+float gain_scale_step[] = {0.01f, 0.1f, 0.2f}; // 增益缩放步进
+
 CustomData gyro_pid_data[] = {
     // 变量地址                 类型              显示名称         步进数组        步进数  索引  整数位  小数位
     {&gyro_pid.kp, data_float_show, "Kp", pid_kp_step, 5, 0, 4, 3},
@@ -195,12 +197,13 @@ CustomData gyro_pid_data[] = {
     {&gyro_pid.kd, data_float_show, "Kd", pid_kd_step, 5, 0, 4, 4},
     {&gyro_pid.max_integral, data_float_show, "Max Integral", pid_limit_step, 3, 0, 5, 1},
     {&gyro_pid.max_output, data_float_show, "Max Output", pid_limit_step, 3, 0, 5, 1},
+    {&gyro_gain_scale, data_float_show, "Gain Scale", gain_scale_step, 3, 0, 3, 2},
 };
 
 Page page_gyro_pid = {
     .name = "Gyro PID",
     .data = gyro_pid_data,
-    .len = 5,
+    .len = 6,
     .stage = Menu,
     .back = NULL, // Menu_Init 中设置
     .enter = {NULL},
@@ -210,7 +213,8 @@ Page page_gyro_pid = {
 };
 
 // 3.3 角度环PID参数
-uint32 machine_angle_step[] = {1, 10, 100}; // 机械中值步进
+uint32 machine_angle_step[] = {1, 10, 100};         // 机械中值步进
+float deadzone_step[] = {0.1f, 1.0f, 5.0f, 10.0f}; // 死区步进
 
 CustomData angle_pid_data[] = {
     {&machine_angle, data_uint32_show, "Mech Zero", machine_angle_step, 3, 0, 5, 0},
@@ -219,12 +223,14 @@ CustomData angle_pid_data[] = {
     {&angle_pid.kd, data_float_show, "Kd", pid_kd_step, 5, 0, 4, 4},
     {&angle_pid.max_integral, data_float_show, "Max Integral", pid_limit_step, 3, 0, 5, 1},
     {&angle_pid.max_output, data_float_show, "Max Output", pid_limit_step, 3, 0, 5, 1},
+    {&angle_deadzone, data_float_show, "Angle Deadzone", deadzone_step, 4, 0, 4, 1},
+    {&angle_gain_scale, data_float_show, "Gain Scale", gain_scale_step, 3, 0, 3, 2},
 };
 
 Page page_angle_pid = {
     .name = "Angle PID",
     .data = angle_pid_data,
-    .len = 6,
+    .len = 8,
     .stage = Menu,
     .back = NULL, // Menu_Init 中设置
     .enter = {NULL},
