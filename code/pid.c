@@ -62,6 +62,14 @@ static float filtered_gyro_y = 0.0f;       // 滤波后的陀螺仪Y轴数据
 static float filtered_motor_output = 0.0f; // 滤波后的电机输出
 static float filtered_pitch = 0.0f;        // 滤波后的pitch角度
 
+// 控制优化参数（导出到菜单）
+float angle_deadzone = 5.0f;      // 角度死区
+float angle_protection = 1500.0f; // 角度保护阈值
+
+// 变增益PID参数
+float angle_gain_scale = 1.0f;    // 角度环死区增益缩放（0-1），越小越平滑
+float gyro_gain_scale = 1.0f;     // 角速度环死区增益缩放（0-1）
+
 // PID计算函数
 float pid_calculate(PID_Controller *pid, float target, float current)
 {
@@ -97,8 +105,8 @@ void gyro_loop_control(int angle_control)
     // 将角度环输出作为角速度目标值
     float target_gyro = (float)angle_control;
 
-    // 角度保护：超出范围时停止电机
-    if (imu_data.pitch > 1800 || imu_data.pitch < -1800)
+    // 角度保护：超出有效作用区间时停止电机
+    if (fabs(imu_data.pitch) > angle_protection)
     {
         // 清空所有积分项，避免积分饱和
         angle_pid.integral = 0;
@@ -117,8 +125,29 @@ void gyro_loop_control(int angle_control)
     // filtered_value = α * current_value + (1-α) * previous_filtered_value
     filtered_gyro_y = gyro_filter_coeff * imu_data.gyro_y + (1.0f - gyro_filter_coeff) * filtered_gyro_y;
 
+    // 变增益控制：根据误差大小动态调整增益
+    float gyro_error = target_gyro - filtered_gyro_y;
+    float gain_factor = 1.0f;
+
+    // 如果误差在死区附近，降低增益减少震荡
+    if (fabs(gyro_error) < 100.0f) // 角速度死区阈值（可调）
+    {
+        // 线性插值：误差越小，增益越低
+        gain_factor = gyro_gain_scale + (1.0f - gyro_gain_scale) * (fabs(gyro_error) / 100.0f);
+    }
+
+    // 临时调整PID参数
+    float original_kp = gyro_pid.kp;
+    float original_ki = gyro_pid.ki;
+    gyro_pid.kp *= gain_factor;
+    gyro_pid.ki *= gain_factor;
+
     // 角速度环PID计算（使用滤波后的陀螺仪数据）
     float motor_output = pid_calculate(&gyro_pid, target_gyro, filtered_gyro_y);
+
+    // 恢复原始参数
+    gyro_pid.kp = original_kp;
+    gyro_pid.ki = original_ki;
 
     // 对PID输出进行低通滤波，减少输出抖动
     filtered_motor_output = output_filter_coeff * motor_output + (1.0f - output_filter_coeff) * filtered_motor_output;
@@ -135,9 +164,31 @@ void angle_loop_control(int speed_control)
 {
     // 对pitch角度进行一阶低通滤波
     filtered_pitch = angle_filter_coeff * imu_data.pitch + (1.0f - angle_filter_coeff) * filtered_pitch;
+
+    // 角度死区处理与变增益控制
+    float angle_error = desired_angle - filtered_pitch;
+    float gain_factor = 1.0f;
+
+    if (fabs(angle_error) < angle_deadzone)
+    {
+        // 死区内：衰减积分 + 降低增益
+        angle_pid.integral *= 0.95f;
+        // 线性插值：误差越小，增益越低
+        gain_factor = angle_gain_scale + (1.0f - angle_gain_scale) * (fabs(angle_error) / angle_deadzone);
+    }
+
+    // 临时调整PID参数（角度环是PD，只调Kp和Kd）
+    float original_kp = angle_pid.kp;
+    float original_kd = angle_pid.kd;
+    angle_pid.kp *= gain_factor;
+    angle_pid.kd *= gain_factor;
+
     // 使用desired_angle作为目标角度（已由速度环更新），用滤波后的pitch
     angle_gyro_target = pid_calculate(&angle_pid, desired_angle, filtered_pitch);
-    // 设置角度环滤波系数
+
+    // 恢复原始参数
+    angle_pid.kp = original_kp;
+    angle_pid.kd = original_kd;
 }
 
 /**
@@ -384,4 +435,36 @@ void drive_speed_loop_control(void)
 
     // 控制行进轮电机
     drive_wheel_control((int16)drive_pwm_output);
+}
+
+/**
+ * @brief 设置角度死区
+ */
+void set_angle_deadzone(float deadzone)
+{
+    angle_deadzone = deadzone;
+}
+
+/**
+ * @brief 设置角度保护阈值
+ */
+void set_angle_protection(float protection)
+{
+    angle_protection = protection;
+}
+
+/**
+ * @brief 获取角度死区
+ */
+float get_angle_deadzone(void)
+{
+    return angle_deadzone;
+}
+
+/**
+ * @brief 获取角度保护阈值
+ */
+float get_angle_protection(void)
+{
+    return angle_protection;
 }

@@ -71,8 +71,8 @@ int core0_main(void)
 
         // 显示菜单
         menu_update();
-        
-
+        momentum_wheel_control(3000);
+        drive_wheel_control(3000);
         // 减少CPU占用
         system_delay_ms(10);
     }

@@ -55,6 +55,12 @@ extern bool enable; // 使能标志
 extern float angle_offset;
 extern uint32_t control_counter;
 
+// 控制优化参数
+extern float angle_deadzone;     // 角度死区
+extern float angle_protection;   // 角度保护阈值
+extern float angle_gain_scale;   // 角度环死区增益缩放
+extern float gyro_gain_scale;    // 角速度环死区增益缩放
+
 // 函数声明
 void pid_init(void);
 void pid_reset(void);
@@ -86,5 +92,11 @@ float get_encoder_speed(void);
 void get_pid_status(float *gyro_error, float *angle_error, float *speed_error,
                     float *gyro_output, float *angle_output, float *speed_output);
 void drive_speed_loop_control(void);
+
+// 控制优化参数设置
+void set_angle_deadzone(float deadzone);
+void set_angle_protection(float protection);
+float get_angle_deadzone(void);
+float get_angle_protection(void);
 
 #endif
