@@ -168,6 +168,9 @@ void control(void)
 {
     count++;
 
+    // 电机保护更新（堵转检测、方向切换保护、蜂鸣器）
+    motor_protection_update();
+
     imu_update();
 
     // 速度环控制（20ms周期，每20个1ms周期执行一次）

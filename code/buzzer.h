@@ -73,11 +73,4 @@ void buzzer_toggle(void);
  */
 bool buzzer_is_active(void);
 
-/**
- * @brief 设置系统时间（毫秒）
- * @param time_ms 系统时间（毫秒）
- * @note 用于同步蜂鸣器的时间基准，如果有全局时间可以调用此函数同步
- */
-void buzzer_set_time(uint32 time_ms);
-
 #endif // BUZZER_H
