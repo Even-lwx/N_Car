@@ -90,7 +90,7 @@ struct Page
     uint8 len;        // 参数数组长度
     Page_Type stage;  // 页面类型
     Page *back;       // 返回的父页面指针
-    Page *enter[4];   // 子页面指针（最多4个）
+    Page *enter[8];   // 子页面指针（最多8个）
     union
     {
         void (*function)(void); // 功能函数指针

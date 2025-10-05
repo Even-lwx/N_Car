@@ -17,6 +17,7 @@ extern Page page_gyro_pid;
 extern Page page_angle_pid;
 extern Page page_speed_pid;
 extern Page page_drive_speed_pid;
+extern Page page_imu_params;
 // 添加新页面时在这里声明
 
 /**************** 内部变量 ****************/
@@ -27,6 +28,7 @@ static Page *param_pages[] = {
     &page_angle_pid,
     &page_speed_pid,
     &page_drive_speed_pid,
+    &page_imu_params,
     // 添加新页面时在这里添加指针
     NULL // 结束标记
 };

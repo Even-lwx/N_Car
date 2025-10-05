@@ -45,7 +45,7 @@ float target_speed = 0.0f;        // 目标速度
 float target_drive_speed = 10.0f; // 行进轮目标速度
 
 // 控制标志
-bool enable = true; // 使能标志，默认启用
+bool enable = false; // 使能标志，默认禁用（需在Cargo模式中启用）
 
 // 控制变量
 static uint32_t count = 0;                      // 控制计数器
@@ -67,8 +67,8 @@ float angle_deadzone = 5.0f;      // 角度死区
 float angle_protection = 1500.0f; // 角度保护阈值
 
 // 变增益PID参数
-float angle_gain_scale = 1.0f;    // 角度环死区增益缩放（0-1），越小越平滑
-float gyro_gain_scale = 1.0f;     // 角速度环死区增益缩放（0-1）
+float angle_gain_scale = 1.0f; // 角度环死区增益缩放（0-1），越小越平滑
+float gyro_gain_scale = 1.0f;  // 角速度环死区增益缩放（0-1）
 
 // PID计算函数
 float pid_calculate(PID_Controller *pid, float target, float current)
@@ -217,6 +217,11 @@ void speed_loop_control(void)
  */
 void control(void)
 {
+    // 如果未启用控制，则不执行PID控制
+    if (!enable)
+    {
+        return;
+    }
     count++;
 
     // 电机保护更新（堵转检测、方向切换保护、蜂鸣器）

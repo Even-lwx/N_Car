@@ -6,9 +6,9 @@
 imu_data_t imu_data = {0}; // IMU数据结构体
 
 // 陀螺仪零偏校准数据（原始数据）
-static int16 gyro_x_offset = -2;
-static int16 gyro_y_offset = 11;
-static int16 gyro_z_offset = 5;
+int16 gyro_x_offset = -2;
+int16 gyro_y_offset = 11;
+int16 gyro_z_offset = 5;
 uint32 machine_angle = 500;  // 机械中值（去掉static，允许外部访问）
 
 // 一阶互补滤波参数（只保留必要变量）
@@ -112,20 +112,24 @@ void imu_update(void)
 
 //-------------------------------------------------------------------------------------------------------------------
 // 函数简介     陀螺仪校准函数
-// 参数说明     sample_count    校准采样次数
+// 参数说明     sample_count    采样次数
 // 返回参数     void
-// 使用示例     imu_calibrate_gyro(200);
-// 备注信息     静止状态下校准陀螺仪零偏
+// 使用示例     imu_calibrate_gyro(2000);
+// 备注信息     采样指定次数陀螺仪原始数据取平均值作为零偏，结果保存到flash
 //-------------------------------------------------------------------------------------------------------------------
 void imu_calibrate_gyro(uint16 sample_count)
 {
     if (!imu_data.is_initialized)
         return;
 
+    if (sample_count == 0)
+        sample_count = 2000; // 默认2000次
+
     int32 gyro_x_sum = 0;
     int32 gyro_y_sum = 0;
     int32 gyro_z_sum = 0;
 
+    // 采样
     for (uint16 i = 0; i < sample_count; i++)
     {
         // 获取陀螺仪原始数据
@@ -134,13 +138,13 @@ void imu_calibrate_gyro(uint16 sample_count)
         gyro_y_sum += imu660rb_gyro_y;
         gyro_z_sum += imu660rb_gyro_z;
 
-        system_delay_ms(10);
+        system_delay_ms(1);
     }
 
     // 计算平均值作为零偏（原始数据）
-    gyro_x_offset = (int16)(gyro_x_sum / sample_count);
-    gyro_y_offset = (int16)(gyro_y_sum / sample_count);
-    gyro_z_offset = (int16)(gyro_z_sum / sample_count);
+    gyro_x_offset = -(int16)(gyro_x_sum / sample_count);
+    gyro_y_offset = -(int16)(gyro_y_sum / sample_count);
+    gyro_z_offset = -(int16)(gyro_z_sum / sample_count);
 }
 
 //-------------------------------------------------------------------------------------------------------------------

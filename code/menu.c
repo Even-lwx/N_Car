@@ -16,6 +16,9 @@ void show_string(uint16 x, uint16 y, const char *str);
 void show_int(uint16 x, uint16 y, int value, uint8 num);
 void show_float(uint16 x, uint16 y, float value, uint8 num, uint8 pointnum);
 
+/**************** 页面前置声明 ****************/
+extern Page main_page;
+
 /**************** 全局变量 ****************/
 
 Page *Now_Menu = NULL;         // 当前菜单页面指针
@@ -162,6 +165,7 @@ CustomData servo_data[] = {
 
 // 2.3 页面定义
 Page page_servo = {
+
     .name = "Servo Control",
     .data = servo_data,
     .len = 1,
@@ -213,7 +217,7 @@ Page page_gyro_pid = {
 };
 
 // 3.3 角度环PID参数
-uint32 machine_angle_step[] = {1, 10, 100};         // 机械中值步进
+uint32 machine_angle_step[] = {1, 10, 100};        // 机械中值步进
 float deadzone_step[] = {0.1f, 1.0f, 5.0f, 10.0f}; // 死区步进
 
 CustomData angle_pid_data[] = {
@@ -298,9 +302,146 @@ Page page_pid = {
 };
 
 //============================================================
-// 4. 调试监控页面 - Debug Monitor (只读显示)
+// 4. IMU菜单 - IMU
 //============================================================
-// 4.1 参数配置数组（复用现有变量，无需步进数组）
+
+// 4.1 IMU参数页面（陀螺仪零偏）
+// 4.1.1 参数步进数组
+int16 gyro_offset_step[] = {1, 10, 100};
+
+// 4.1.2 参数配置数组
+CustomData imu_data_params[] = {
+    {&gyro_x_offset, data_int16_show, "Gyro X Offset", gyro_offset_step, 3, 0, 5, 0},
+    {&gyro_y_offset, data_int16_show, "Gyro Y Offset", gyro_offset_step, 3, 0, 5, 0},
+    {&gyro_z_offset, data_int16_show, "Gyro Z Offset", gyro_offset_step, 3, 0, 5, 0},
+};
+
+// 4.1.3 页面定义
+Page page_imu_params = {
+    .name = "Gyro Offsets",
+    .data = imu_data_params,
+    .len = 3,
+    .stage = Menu,
+    .back = NULL, // Menu_Init 中设置
+    .enter = {NULL},
+    .content = {NULL},
+    .order = 0,
+    .scroll_offset = 0,
+};
+
+// 4.2 陀螺仪校准功能页面
+// 4.2.1 校准函数包装
+void gyro_calibration_wrapper(void)
+{
+    // 显示提示信息
+    ips_clear();
+    show_string(0, 1, "Gyro Calibration");
+    show_string(0, 4, "Place device");
+    show_string(0, 6, "stable...");
+    show_string(0, 9, "Starting in 2s");
+
+    // 延迟2秒后蜂鸣器响一声，提示开始校准
+    system_delay_ms(2000);
+    buzzer_beep(1, 50, 100);
+
+    // 检查IMU是否初始化
+    if (!imu_data.is_initialized)
+    {
+        ips_clear();
+        show_string(0, 4, "IMU Not Init!");
+        show_string(0, 7, "Press BACK");
+        return;
+    }
+
+    // 显示校准进行中
+    ips_clear();
+    show_string(0, 4, "Calibrating...");
+    show_string(0, 7, "Please wait");
+
+    // 执行校准（采样500次，约0.5秒）
+    imu_calibrate_gyro(5000);
+
+    // 保存参数到Flash
+    Param_Save_All();
+
+    // 校准完成，蜂鸣器响一声
+    buzzer_beep(1, 200, 100);
+
+    // 显示完成信息
+    ips_clear();
+    show_string(0, 1, "Calibration Done!");
+    show_string(0, 4, "X Offset:");
+    show_int(8, 4, gyro_x_offset, 5);
+    show_string(0, 6, "Y Offset:");
+    show_int(8, 6, gyro_y_offset, 5);
+    show_string(0, 8, "Z Offset:");
+    show_int(8, 8, gyro_z_offset, 5);
+    show_string(0, 11, "Press BACK");
+
+    // 等待退出由菜单系统统一处理
+}
+
+// 4.2.2 页面定义
+Page page_gyro_calibration = {
+    .name = "Calibrate",
+    .data = NULL,
+    .len = 0,
+    .stage = Funtion,
+    .back = NULL, // Menu_Init 中设置
+    .enter = {NULL},
+    .content = {.function = gyro_calibration_wrapper},
+    .order = 0,
+    .scroll_offset = 0,
+};
+
+// 4.3 IMU主菜单页面（二级菜单，包含2个子菜单）
+Page page_imu = {
+    .name = "IMU",
+    .data = NULL, // 无参数，仅作为子菜单容器
+    .len = 2,     // 2个子菜单
+    .stage = Menu,
+    .back = NULL, // Menu_Init 中设置
+    .enter = {&page_imu_params, &page_gyro_calibration},
+    .content = {NULL},
+    .order = 0,
+    .scroll_offset = 0,
+};
+
+//============================================================
+// 5. Cargo运行模式
+//============================================================
+// 5.1 Cargo运行函数
+void cargo_run_mode(void)
+{
+    // 启用PID控制
+    enable = true;
+
+    // 清屏并显示运行状态
+    ips_clear();
+    show_string(0, 6, "Running...");
+    show_string(0, 9, "Press BACK to exit");
+
+    // 函数结束后，等待退出的逻辑由菜单系统统一处理
+    // 当用户按BACK键退出时，会自动调用清理代码
+}
+
+// 5.2 Cargo页面定义
+Page page_cargo = {
+    .name = "Cargo",
+    .data = NULL,
+    .len = 0,
+    .stage = Funtion,
+    .back = NULL, // Menu_Init 中设置
+    .enter = {NULL},
+    .content = {.function = cargo_run_mode},
+    .order = 0,
+    .scroll_offset = 0,
+};
+
+//============================================================
+// 6. 调试监控页面 - Debug Monitor (只读显示)
+//============================================================
+// 5.1 参数配置数组（复用现有变量，无需步进数组）
 CustomData debug_data[] = {
     // 变量地址          类型              显示名称      步进数组  步进数  索引  整数位  小数位
     {&encoder[0], data_int16_show, "Encoder0", NULL, 0, 0, 5, 0},
@@ -310,7 +451,7 @@ CustomData debug_data[] = {
     // 可在此处添加更多传感器或状态数据
 };
 
-// 4.2 页面定义
+// 6.2 页面定义
 Page page_debug = {
     .name = "Debug Monitor",
     .data = debug_data,
@@ -324,7 +465,7 @@ Page page_debug = {
 };
 
 //============================================================
-// 5. 主菜单 - Main Menu
+// 7. 主菜单 - Main Menu
 //============================================================
 // 说明：
 // - 上电自动从 Flash 加载参数
@@ -333,10 +474,10 @@ Page page_debug = {
 Page main_page = {
     .name = "Main Menu",
     .data = NULL, // 主菜单无参数
-    .len = 4,     // 4 个子菜单
+    .len = 5,     // 5 个子菜单
     .stage = Menu,
     .back = NULL, // 主菜单无父菜单
-    .enter = {&page_servo, &page_pid, &page_debug, NULL},
+    .enter = {&page_cargo, &page_servo, &page_pid, &page_imu, &page_debug},
     .content = {NULL},
     .order = 0,
     .scroll_offset = 0,
@@ -394,8 +535,10 @@ void Menu_Init(void)
     Key_Init();
 
     // 设置页面之间的关系（父页面指针）
+    page_cargo.back = &main_page;
     page_servo.back = &main_page;
     page_pid.back = &main_page;
+    page_imu.back = &main_page;
     page_debug.back = &main_page;
 
     // 设置PID子页面的父页面指针（三级菜单）
@@ -403,6 +546,10 @@ void Menu_Init(void)
     page_angle_pid.back = &page_pid;
     page_speed_pid.back = &page_pid;
     page_drive_speed_pid.back = &page_pid;
+
+    // 设置IMU子页面的父页面指针（三级菜单）
+    page_imu_params.back = &page_imu;
+    page_gyro_calibration.back = &page_imu;
 
     // 上电自动从Flash加载参数
     Param_Load_All();
@@ -426,6 +573,36 @@ void Menu_Enter(void)
             Now_Menu->order = 0;
             Now_Menu->scroll_offset = 0; // 重置滚动偏移
             need_refresh = 1;            // 进入子菜单时请求刷新屏幕
+
+            // 如果进入的是功能页面，立即执行功能函数并等待退出
+            if (Now_Menu->stage == Funtion && Now_Menu->content.function != NULL)
+            {
+                // 执行功能函数（显示界面、初始化等）
+                Now_Menu->content.function();
+
+                // 进入等待循环，只响应BACK键退出
+                while (1)
+                {
+                    if (Key_Scan() == KEY_BACK)
+                    {
+                        // Cargo模式特殊处理：退出时禁用PID
+                        if (Now_Menu == &page_cargo)
+                        {
+                            enable = false;
+                        }
+
+                        // 返回父菜单
+                        if (Now_Menu->back != NULL)
+                        {
+                            ips_clear();
+                            Now_Menu = Now_Menu->back;
+                            need_refresh = 1;
+                        }
+                        break;
+                    }
+                    system_delay_ms(20);
+                }
+            }
         }
     }
     else if (Now_Menu->stage == Change)
@@ -466,10 +643,13 @@ void Menu_Back(void)
     }
     else if (Now_Menu->stage == Funtion)
     {
-        // 退出功能页面，返回到 Menu 阶段
-        ips_clear(); // 立即清屏
-        Now_Menu->stage = Menu;
-        need_refresh = 1; // 退出功能模式时请求刷新屏幕
+        // 退出功能页面，返回到父菜单
+        if (Now_Menu->back != NULL)
+        {
+            ips_clear(); // 立即清屏
+            Now_Menu = Now_Menu->back;
+            need_refresh = 1; // 返回父菜单时请求刷新屏幕
+        }
     }
 }
 

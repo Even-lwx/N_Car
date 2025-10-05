@@ -74,12 +74,17 @@ extern uint8 acc_ration;     // 加速度计比例系数
 extern float call_cycle;     // 调用周期（单位：秒）
 extern uint32 machine_angle; // 机械中值
 
+// 陀螺仪零偏校准数据（原始数据）
+extern int16 gyro_x_offset;
+extern int16 gyro_y_offset;
+extern int16 gyro_z_offset;
+
 // *************************** 函数声明 ***************************
 uint8 imu_init(void);    // IMU初始化函数
 void imu_update(void);   // IMU数据更新函数
 void imu_get_data(void); // 获取IMU原始数据
 
-void imu_calibrate_gyro(uint16 sample_count); // 陀螺仪校准函数
+void imu_calibrate_gyro(uint16 sample_count); // 陀螺仪校准函数（参数：采样次数，0=默认2000）
 float imu_get_roll(void);                     // 获取横滚角
 float imu_get_pitch(void);                    // 获取俯仰角
 float imu_get_yaw(void);                      // 获取偏航角
