@@ -28,7 +28,7 @@ typedef enum {
 void buzzer_init(void);
 
 /**
- * @brief 蜂鸣器更新函数（需要定时调用，建议1ms周期）
+ * @brief 蜂鸣器更新函数（需要定时调用，建议20ms周期）
  * @note 在定时器中断中调用，负责处理蜂鸣器的自动鸣叫逻辑
  */
 void buzzer_update(void);

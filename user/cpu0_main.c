@@ -36,15 +36,16 @@
 #pragma section all "cpu0_dsram"
 // 将本语句与#pragma section all restore语句之间的全局变量都放在CPU0的RAM中
 
-
 // **************************** 代码区域 ****************************
 void all_init(void)
 {
     clock_init(); // 获取时钟频率<务必保留>
     debug_init(); // 初始化默认调试串口
-
+    // 从 Flash 加载保存的参数（必须在 menu_init 之前）
+    Param_Load_All();
+    Menu_Init(); // 初始化菜单系统
     // 蜂鸣器初始化（最早初始化，用于系统启动提示和保护报警）
-    buzzer_init();              // 初始化蜂鸣器
+    buzzer_init(); // 初始化蜂鸣器
 
     // 初始化各个模块
     ips114_init();              // 初始化IPS114液晶屏
@@ -54,11 +55,7 @@ void all_init(void)
     pid_init();                 // 初始化简化PID控制系统
     pit_ms_init(CCU60_CH0, 1);  // 1ms定时器用于PID控制
     pit_ms_init(CCU60_CH1, 20); // 20ms定时器用于按键扫描（长按检测）
-
-    // 从 Flash 加载保存的参数（必须在 menu_init 之前）
-    Param_Load_All();
-
-    Menu_Init(); // 初始化菜单系统
+    buzzer_beep(1, 100, 100);
 }
 int core0_main(void)
 {

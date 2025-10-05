@@ -53,14 +53,17 @@ IFX_INTERRUPT(cc60_pit_ch1_isr, 0, CCU6_0_CH1_ISR_PRIORITY)
     interrupt_global_enable(0); // 开启中断嵌套
     pit_clear_flag(CCU60_CH1);
 
+    // 蜂鸣器更新（20ms周期）
+    buzzer_update();
+
     // 按键扫描（建议定时器周期设置为20ms）
-    static uint8 last_key = KEY_NONE;  // 记录上次按键值
-    uint8 key = Key_Scan();            // 扫描按键
-    
+    static uint8 last_key = KEY_NONE; // 记录上次按键值
+    uint8 key = Key_Scan();           // 扫描按键
+
     // 只有按键值改变时才处理（避免重复触发）
-    if(key != KEY_NONE && key != last_key)
+    if (key != KEY_NONE && key != last_key)
     {
-        Key_operation(key);  // 处理按键操作
+        Key_operation(key); // 处理按键操作
     }
     last_key = key;
 }

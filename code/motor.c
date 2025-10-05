@@ -180,14 +180,11 @@ static void trigger_protection(uint8 motor_id, protect_reason_t reason)
 // 参数说明     void
 // 返回参数     void
 // 使用示例     motor_protection_update(); // 在control()函数中调用
-// 备注信息     负责堵转检测、保护自动解除、蜂鸣器控制等
+// 备注信息     负责堵转检测、保护自动解除等
 //-------------------------------------------------------------------------------------------------------------------
 void motor_protection_update(void)
 {
     protection_tick_count++; // 更新计数器（每次调用+1，假设1ms周期）
-
-    // 更新蜂鸣器
-    buzzer_update();
 
     // 遍历两个电机进行保护检测
     for (uint8 i = 0; i < 2; i++)

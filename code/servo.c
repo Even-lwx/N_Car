@@ -25,8 +25,7 @@ float servo_motor_duty = 90.0; // 舵机当前角度
 // 舵机初始化函数
 void servo_init(void)
 {
-    pwm_init(SERVO_MOTOR_PWM, SERVO_MOTOR_FREQ, SERVO_MOTOR_DUTY(90)); // 默认中位
-    servo_motor_duty = 90.0f;
+    pwm_init(SERVO_MOTOR_PWM, SERVO_MOTOR_FREQ, SERVO_MOTOR_DUTY(servo_motor_duty)); // 使用菜单设置的角度
 }
 
 // 设置舵机角度（角度范围自动裁剪）
