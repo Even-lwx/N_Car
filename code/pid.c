@@ -217,22 +217,27 @@ void speed_loop_control(void)
  */
 void control(void)
 {
-    // 如果未启用控制，则不执行PID控制
+    count++;
+
+    // 传感器数据更新（始终执行，不受enable控制）
+    motor_protection_update();
+    imu_update();
+
+    // 速度环周期采集编码器（20ms周期）
+    if (count % 20 == 0)
+    {
+        motor_encoder_update();
+    }
+
+    // 如果未启用控制，传感器数据已更新，直接返回不执行PID
     if (!enable)
     {
         return;
     }
-    count++;
-
-    // 电机保护更新（堵转检测、方向切换保护、蜂鸣器）
-    motor_protection_update();
-
-    imu_update();
 
     // 速度环控制（20ms周期，每20个1ms周期执行一次）
     if (count % 20 == 0)
     {
-        motor_encoder_update();
         speed_loop_control();
     }
 

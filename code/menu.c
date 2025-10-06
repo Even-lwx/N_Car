@@ -439,27 +439,54 @@ Page page_cargo = {
 };
 
 //============================================================
-// 6. 调试监控页面 - Debug Monitor (只读显示)
+// 6. 调试监控页面 - Debug Monitor
 //============================================================
-// 5.1 参数配置数组（复用现有变量，无需步进数组）
-CustomData debug_data[] = {
-    // 变量地址          类型              显示名称      步进数组  步进数  索引  整数位  小数位
-    {&encoder[0], data_int16_show, "Encoder0", NULL, 0, 0, 5, 0},
-    {&encoder[1], data_int16_show, "Encoder1", NULL, 0, 0, 5, 0},
-    {&imu_data.gyro_y, data_int16_show, "Gyro Y", NULL, 0, 0, 6, 0},
-    {&imu_data.pitch, data_float_show, "Pitch", NULL, 0, 0, 5, 2},
-    // 可在此处添加更多传感器或状态数据
-};
+// 6.1 调试监控函数
+void debug_monitor_mode(void)
+{
+    ips_clear();
+    // 循环显示实时数据（数据由定时器中断自动更新）
+    while (1)
+    {
+
+        show_string(0, 0, "Debug Monitor");
+
+        // 显示编码器数据
+        show_string(0, 3, "Enc0:");
+        show_int(6, 3, encoder[0], 5);
+
+        show_string(0, 5, "Enc1:");
+        show_int(6, 5, encoder[1], 5);
+
+        // 显示陀螺仪数据
+        show_string(0, 7, "GyroY:");
+        show_int(7, 7, imu_data.gyro_y, 6);
+
+        // 显示俯仰角
+        show_string(0, 9, "Pitch:");
+        show_float(7, 9, imu_data.pitch, 5, 2);
+
+        show_string(0, 12, "Press BACK");
+
+        // 检测退出
+        if (Key_Scan() == KEY_BACK)
+        {
+            break;
+        }
+
+        system_delay_ms(50); // 20Hz刷新率
+    }
+}
 
 // 6.2 页面定义
 Page page_debug = {
     .name = "Debug Monitor",
-    .data = debug_data,
-    .len = 4,
-    .stage = Menu,
+    .data = NULL,
+    .len = 0,
+    .stage = Funtion,
     .back = NULL, // Menu_Init 中设置
     .enter = {NULL},
-    .content = {NULL},
+    .content = {.function = debug_monitor_mode},
     .order = 0,
     .scroll_offset = 0,
 };

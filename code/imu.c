@@ -9,7 +9,7 @@ imu_data_t imu_data = {0}; // IMU数据结构体
 int16 gyro_x_offset = -2;
 int16 gyro_y_offset = 11;
 int16 gyro_z_offset = 5;
-uint32 machine_angle = 500;  // 机械中值（去掉static，允许外部访问）
+uint32 machine_angle = 500; // 机械中值（去掉static，允许外部访问）
 
 // 一阶互补滤波参数（只保留必要变量）
 static float angle_pitch_temp = 0.0f;
@@ -92,7 +92,7 @@ void imu_calculate_attitude(void)
     angle_pitch_temp += ((gyro_temp + acc_temp) * call_cycle);
     imu_data.pitch = angle_pitch_temp + machine_angle;
 
-    // pitch/yaw角按原有方式处理或设为0
+    // roll/yaw角按原有方式处理或设为0
     imu_data.roll = 0.0f;
     imu_data.yaw = 0.0f;
 }
