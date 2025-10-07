@@ -421,8 +421,23 @@ void cargo_run_mode(void)
     show_string(0, 6, "Running...");
     show_string(0, 9, "Press BACK to exit");
 
-    // 函数结束后，等待退出的逻辑由菜单系统统一处理
-    // 当用户按BACK键退出时，会自动调用清理代码
+    // 在函数内部等待BACK键，确保退出时禁用enable
+    while (1)
+    {
+        if (Key_Scan() == KEY_BACK)
+        {
+            enable = false; // 退出前确保禁用PID
+
+            // 立即停止两个电机（设置占空比为0）
+            pwm_set_duty(MOMENTUM_WHEEL_PWM, 0);
+            pwm_set_duty(DRIVE_WHEEL_PWM, 0);
+
+            break;
+        }
+        system_delay_ms(20);
+    }
+
+    // 函数结束时，enable已经被设置为false，电机已停止
 }
 
 // 5.2 Cargo页面定义
@@ -612,12 +627,6 @@ void Menu_Enter(void)
                 {
                     if (Key_Scan() == KEY_BACK)
                     {
-                        // Cargo模式特殊处理：退出时禁用PID
-                        if (Now_Menu == &page_cargo)
-                        {
-                            enable = false;
-                        }
-
                         // 返回父菜单
                         if (Now_Menu->back != NULL)
                         {

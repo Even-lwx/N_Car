@@ -53,14 +53,9 @@ static float desired_angle = 0.0f;              // 期望角度（速度环输�
 static float angle_gyro_target = 0.0f;          // 目标角速度（角度环输出）
 static uint32_t speed_integral_clear_count = 0; // 速度环积分清零计数器
 
-// 低通滤波器相关变量
-
-static float gyro_filter_coeff = 1.0f;     // 陀螺仪数据滤波系数 (0-1, 值越大滤波越强)
-static float output_filter_coeff = 0.3f;   // 输出滤波系数
-static float angle_filter_coeff = 0.4f;    // 角度环滤波系数 (0-1)
-static float filtered_gyro_y = 0.0f;       // 滤波后的陀螺仪Y轴数据
-static float filtered_motor_output = 0.0f; // 滤波后的电机输出
-static float filtered_pitch = 0.0f;        // 滤波后的pitch角度
+// 一阶低通滤波器相关变量（仅对PID输出滤波）
+static float output_filter_coeff = 0.3f;       // 输出滤波系数 (0-1)
+static float filtered_motor_output = 0.0f;     // 滤波后的电机输出
 
 // 控制优化参数（导出到菜单）
 float angle_deadzone = 5.0f;      // 角度死区
@@ -113,20 +108,18 @@ void gyro_loop_control(int angle_control)
         gyro_pid.integral = 0;
         speed_pid.integral = 0;
 
-        // 重置滤波器状态
-        filtered_gyro_y = 0.0f;
+        // 重置输出滤波器状态
         filtered_motor_output = 0.0f;
 
         momentum_wheel_control(0);
         return;
     }
 
-    // 对陀螺仪数据进行低通滤波（一阶低通滤波器）
-    // filtered_value = α * current_value + (1-α) * previous_filtered_value
-    filtered_gyro_y = gyro_filter_coeff * imu_data.gyro_y + (1.0f - gyro_filter_coeff) * filtered_gyro_y;
+    // 使用IMU中已经滤波后的陀螺仪数据
+    float current_gyro_y = (float)imu_data.gyro_y;
 
     // 变增益控制：根据误差大小动态调整增益
-    float gyro_error = target_gyro - filtered_gyro_y;
+    float gyro_error = target_gyro - current_gyro_y;
     float gain_factor = 1.0f;
 
     // 如果误差在死区附近，降低增益减少震荡
@@ -142,14 +135,15 @@ void gyro_loop_control(int angle_control)
     gyro_pid.kp *= gain_factor;
     gyro_pid.ki *= gain_factor;
 
-    // 角速度环PID计算（使用滤波后的陀螺仪数据）
-    float motor_output = pid_calculate(&gyro_pid, target_gyro, filtered_gyro_y);
+    // 角速度环PID计算（使用IMU中已滤波的陀螺仪数据）
+    float motor_output = pid_calculate(&gyro_pid, target_gyro, current_gyro_y);
 
     // 恢复原始参数
     gyro_pid.kp = original_kp;
     gyro_pid.ki = original_ki;
 
-    // 对PID输出进行低通滤波，减少输出抖动
+    // 对PID输出进行一阶低通滤波，减少输出抖动
+    // filtered_value = α * current_value + (1-α) * previous_filtered_value
     filtered_motor_output = output_filter_coeff * motor_output + (1.0f - output_filter_coeff) * filtered_motor_output;
 
     // 控制电机（使用滤波后的输出）
@@ -162,11 +156,11 @@ void gyro_loop_control(int angle_control)
  */
 void angle_loop_control(int speed_control)
 {
-    // 对pitch角度进行一阶低通滤波
-    filtered_pitch = angle_filter_coeff * imu_data.pitch + (1.0f - angle_filter_coeff) * filtered_pitch;
+    // 使用IMU中已经滤波后的pitch角度（IMU中已对原始数据进行滤波再解算）
+    float current_pitch = imu_data.pitch;
 
     // 角度死区处理与变增益控制
-    float angle_error = desired_angle - filtered_pitch;
+    float angle_error = desired_angle - current_pitch;
     float gain_factor = 1.0f;
 
     if (fabs(angle_error) < angle_deadzone)
@@ -183,8 +177,8 @@ void angle_loop_control(int speed_control)
     angle_pid.kp *= gain_factor;
     angle_pid.kd *= gain_factor;
 
-    // 使用desired_angle作为目标角度（已由速度环更新），用滤波后的pitch
-    angle_gyro_target = pid_calculate(&angle_pid, desired_angle, filtered_pitch);
+    // 使用desired_angle作为目标角度（已由速度环更新），用IMU滤波后的pitch
+    angle_gyro_target = pid_calculate(&angle_pid, desired_angle, current_pitch);
 
     // 恢复原始参数
     angle_pid.kp = original_kp;
@@ -233,6 +227,14 @@ void control(void)
     if (!enable)
     {
         return;
+    }
+
+    // 角度在±500范围内时清空积分项，重新开始积分
+    if (imu_data.pitch >= -500.0f && imu_data.pitch <= 500.0f)
+    {
+        gyro_pid.integral = 0.0f;
+        angle_pid.integral = 0.0f;
+        speed_pid.integral = 0.0f;
     }
 
     // 速度环控制（20ms周期，每20个1ms周期执行一次）
@@ -291,9 +293,7 @@ void pid_init(void)
     drive_speed_pid.output = 0;
 
     // 初始化滤波器状态
-    filtered_gyro_y = 0.0f;
     filtered_motor_output = 0.0f;
-    filtered_pitch = 0.0f;
 }
 
 /**
@@ -375,18 +375,6 @@ void set_drive_speed_pid_params(float kp, float ki, float kd)
 }
 
 /**
- * @brief 设置陀螺仪数据滤波系数
- * @param coeff 滤波系数 (0.0-1.0)，值越大滤波越强
- */
-void set_gyro_filter_coeff(float coeff)
-{
-    if (coeff >= 0.0f && coeff <= 1.0f)
-    {
-        gyro_filter_coeff = coeff;
-    }
-}
-
-/**
  * @brief 设置输出滤波系数
  * @param coeff 滤波系数 (0.0-1.0)，值越大滤波越强
  */
@@ -396,22 +384,6 @@ void set_output_filter_coeff(float coeff)
     {
         output_filter_coeff = coeff;
     }
-}
-
-/**
- * @brief 获取陀螺仪数据滤波系数
- */
-float get_gyro_filter_coeff(void)
-{
-    return gyro_filter_coeff;
-}
-
-/**
- * @brief 获取输出滤波系数
- */
-float get_output_filter_coeff(void)
-{
-    return output_filter_coeff;
 }
 
 /**

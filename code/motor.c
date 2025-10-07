@@ -8,6 +8,9 @@ int8 duty = 0;          // 当前占空比
 bool dir = true;        // 计数方向
 int16 encoder[2] = {0}; // 编码器值
 
+// *************************** 外部变量引用 ***************************
+extern bool enable; // PID使能标志(定义在pid.c中)
+
 // *************************** 电机保护相关变量 ***************************
 // 保护触发原因枚举
 typedef enum
@@ -104,6 +107,13 @@ static void motor_control_with_protection(uint8 motor_id, int16 pwm_value, uint3
         return;
 
     motor_protection_t *protect = &motor_protect[motor_id];
+
+    // 如果使能标志为false，强制输出0（优先级最高）
+    if (!enable)
+    {
+        pwm_set_duty(pwm_pin, 0);
+        return;
+    }
 
     // 如果处于保护状态，强制输出0
     if (protect->is_protected)

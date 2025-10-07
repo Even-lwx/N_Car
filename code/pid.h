@@ -80,13 +80,8 @@ void set_angle_pid_params(float kp, float ki, float kd);
 void set_speed_pid_params(float kp, float ki, float kd);
 void set_drive_speed_pid_params(float kp, float ki, float kd);
 
-// 滤波参数设置函数
-void set_gyro_filter_coeff(float coeff);
+// 输出滤波器参数设置函数
 void set_output_filter_coeff(float coeff);
-void set_angle_filter_coeff(float coeff);
-float get_gyro_filter_coeff(void);
-float get_output_filter_coeff(void);
-float get_angle_filter_coeff(void);
 
 float get_encoder_speed(void);
 void get_pid_status(float *gyro_error, float *angle_error, float *speed_error,

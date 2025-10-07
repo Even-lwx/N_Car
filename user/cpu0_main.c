@@ -51,11 +51,11 @@ void all_init(void)
     ips114_init();              // 初始化IPS114液晶屏
     imu_init();                 // 初始化IMU陀螺仪
     servo_init();               // 初始化舵机
-    motor_init();               // 初始化电机和编码器
+    motor_init();               // 初始化电                                                                                                                                                                                                                                                  机和编码器
     pid_init();                 // 初始化简化PID控制系统
     pit_ms_init(CCU60_CH0, 1);  // 1ms定时器用于PID控制
     pit_ms_init(CCU60_CH1, 20); // 20ms定时器用于按键扫描（长按检测）
-    buzzer_beep(1, 100, 100);
+    //buzzer_beep(1, 100, 100);
 }
 int core0_main(void)
 {
@@ -68,8 +68,7 @@ int core0_main(void)
 
         // 显示菜单
         menu_update();
-        //momentum_wheel_control(3000);
-        //drive_wheel_control(3000);
+
         // 减少CPU占用
         system_delay_ms(10);
     }
