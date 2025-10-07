@@ -201,17 +201,11 @@ void motor_protection_update(void)
     {
         motor_protection_t *protect = &motor_protect[i];
 
-        // 如果处于保护状态，检查是否可以解除
+        // 如果处于保护状态，禁止自动解除，必须手动调用 motor_reset_protection()
         if (protect->is_protected)
         {
-            // 计数差值 >= 保护持续时间（2000次 = 2000ms）
-            if ((protection_tick_count - protect->protect_start_count) >= PROTECTION_DISABLE_TIME_MS)
-            {
-                // 保护时间到，自动解除保护
-                protect->is_protected = false;
-                protect->protect_reason = PROTECT_NONE;
-                protect->stall_detect_count = 0;
-            }
+            // 保持保护状态，等待菜单操作解除
+            continue;
         }
         else
         {

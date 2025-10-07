@@ -55,7 +55,7 @@ void all_init(void)
     pid_init();                 // 初始化简化PID控制系统
     pit_ms_init(CCU60_CH0, 1);  // 1ms定时器用于PID控制
     pit_ms_init(CCU60_CH1, 20); // 20ms定时器用于按键扫描（长按检测）
-    //buzzer_beep(1, 100, 100);
+    // buzzer_beep(1, 100, 100);
 }
 int core0_main(void)
 {
@@ -65,7 +65,6 @@ int core0_main(void)
 
     while (1)
     {
-
         // 显示菜单
         menu_update();
 

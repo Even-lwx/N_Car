@@ -6,10 +6,10 @@
 imu_data_t imu_data = {0}; // IMU数据结构体
 
 // 陀螺仪零偏校准数据（原始数据）
-int16 gyro_x_offset = -2;
-int16 gyro_y_offset = 11;
-int16 gyro_z_offset = 5;
-uint32 machine_angle = 500; // 机械中值（去掉static，允许外部访问）
+int16 gyro_x_offset = 0;
+int16 gyro_y_offset = 0;
+int16 gyro_z_offset = 0;
+uint32 machine_angle = 0; // 机械中值（去掉static，允许外部访问）
 
 // 二阶Butterworth低通滤波器结构体
 typedef struct
@@ -167,7 +167,7 @@ void imu_get_data(void)
     imu_data.gyro_y = (int16)butterworth_filter(&gyro_y_filter, raw_gyro_y);
 
     // 输出原始数据和滤波后的数据
-    //printf("%d,%d\r\n", imu_data.gyro_y, (int16)raw_gyro_y);
+    // printf("%d,%d\r\n", imu_data.gyro_y, (int16)raw_gyro_y);
 
     imu_data.data_ready = true;
 }
@@ -226,8 +226,6 @@ void imu_calibrate_gyro(uint16 sample_count)
         gyro_x_sum += imu660rb_gyro_x;
         gyro_y_sum += imu660rb_gyro_y;
         gyro_z_sum += imu660rb_gyro_z;
-
-        system_delay_ms(1);
     }
 
     // 计算平均值作为零偏（原始数据）

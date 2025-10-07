@@ -1,6 +1,8 @@
 #include "pid.h"
 #include "zf_common_headfile.h"
 
+// *************************** 宏定义 ***************************
+
 // *************************** 全局变量定义 ***************************
 
 // 角速度环PID控制器
@@ -48,14 +50,13 @@ float target_drive_speed = 10.0f; // 行进轮目标速度
 bool enable = false; // 使能标志，默认禁用（需在Cargo模式中启用）
 
 // 控制变量
-static uint32_t count = 0;                      // 控制计数器
-static float desired_angle = 0.0f;              // 期望角度（速度环输出）
-static float angle_gyro_target = 0.0f;          // 目标角速度（角度环输出）
-static uint32_t speed_integral_clear_count = 0; // 速度环积分清零计数器
+static uint32_t count = 0;             // 控制计数器
+static float desired_angle = 0.0f;     // 期望角度（速度环输出）
+static float angle_gyro_target = 0.0f; // 目标角速度（角度环输出）
 
 // 一阶低通滤波器相关变量（仅对PID输出滤波）
-static float output_filter_coeff = 0.3f;       // 输出滤波系数 (0-1)
-static float filtered_motor_output = 0.0f;     // 滤波后的电机输出
+static float output_filter_coeff = 0.3f;   // 输出滤波系数 (0-1)
+static float filtered_motor_output = 0.0f; // 滤波后的电机输出
 
 // 控制优化参数（导出到菜单）
 float angle_deadzone = 5.0f;      // 角度死区
@@ -112,35 +113,16 @@ void gyro_loop_control(int angle_control)
         filtered_motor_output = 0.0f;
 
         momentum_wheel_control(0);
+        drive_wheel_control(0);
+
         return;
     }
 
     // 使用IMU中已经滤波后的陀螺仪数据
     float current_gyro_y = (float)imu_data.gyro_y;
 
-    // 变增益控制：根据误差大小动态调整增益
-    float gyro_error = target_gyro - current_gyro_y;
-    float gain_factor = 1.0f;
-
-    // 如果误差在死区附近，降低增益减少震荡
-    if (fabs(gyro_error) < 100.0f) // 角速度死区阈值（可调）
-    {
-        // 线性插值：误差越小，增益越低
-        gain_factor = gyro_gain_scale + (1.0f - gyro_gain_scale) * (fabs(gyro_error) / 100.0f);
-    }
-
-    // 临时调整PID参数
-    float original_kp = gyro_pid.kp;
-    float original_ki = gyro_pid.ki;
-    gyro_pid.kp *= gain_factor;
-    gyro_pid.ki *= gain_factor;
-
     // 角速度环PID计算（使用IMU中已滤波的陀螺仪数据）
     float motor_output = pid_calculate(&gyro_pid, target_gyro, current_gyro_y);
-
-    // 恢复原始参数
-    gyro_pid.kp = original_kp;
-    gyro_pid.ki = original_ki;
 
     // 对PID输出进行一阶低通滤波，减少输出抖动
     // filtered_value = α * current_value + (1-α) * previous_filtered_value
@@ -159,30 +141,8 @@ void angle_loop_control(int speed_control)
     // 使用IMU中已经滤波后的pitch角度（IMU中已对原始数据进行滤波再解算）
     float current_pitch = imu_data.pitch;
 
-    // 角度死区处理与变增益控制
-    float angle_error = desired_angle - current_pitch;
-    float gain_factor = 1.0f;
-
-    if (fabs(angle_error) < angle_deadzone)
-    {
-        // 死区内：衰减积分 + 降低增益
-        angle_pid.integral *= 0.95f;
-        // 线性插值：误差越小，增益越低
-        gain_factor = angle_gain_scale + (1.0f - angle_gain_scale) * (fabs(angle_error) / angle_deadzone);
-    }
-
-    // 临时调整PID参数（角度环是PD，只调Kp和Kd）
-    float original_kp = angle_pid.kp;
-    float original_kd = angle_pid.kd;
-    angle_pid.kp *= gain_factor;
-    angle_pid.kd *= gain_factor;
-
     // 使用desired_angle作为目标角度（已由速度环更新），用IMU滤波后的pitch
     angle_gyro_target = pid_calculate(&angle_pid, desired_angle, current_pitch);
-
-    // 恢复原始参数
-    angle_pid.kp = original_kp;
-    angle_pid.kd = original_kd;
 }
 
 /**
@@ -190,15 +150,6 @@ void angle_loop_control(int speed_control)
  */
 void speed_loop_control(void)
 {
-    speed_integral_clear_count++;
-
-    // 定时清零积分项（每1秒清零一次，10ms * 100 = 1000ms）
-    if (speed_integral_clear_count >= 100)
-    {
-        speed_pid.integral = 0;
-        speed_integral_clear_count = 0;
-    }
-
     // 速度环PID计算，输出作为角度偏移
     float speed_angle_offset = pid_calculate(&speed_pid, target_speed, encoder[0]);
 
@@ -214,7 +165,7 @@ void control(void)
     count++;
 
     // 传感器数据更新（始终执行，不受enable控制）
-    motor_protection_update();
+
     imu_update();
 
     // 速度环周期采集编码器（20ms周期）
@@ -228,14 +179,16 @@ void control(void)
     {
         return;
     }
+    motor_protection_update();
 
-    // 角度在±500范围内时清空积分项，重新开始积分
-    if (imu_data.pitch >= -500.0f && imu_data.pitch <= 500.0f)
-    {
-        gyro_pid.integral = 0.0f;
-        angle_pid.integral = 0.0f;
-        speed_pid.integral = 0.0f;
-    }
+    // 角度在±200范围内时清空积分项，重新开始积分
+    // if (imu_data.pitch >= -200.0f && imu_data.pitch <= 200.0f)
+    // {
+    //     gyro_pid.integral = 0.0f;
+    //     angle_pid.integral = 0.0f;
+    //     speed_pid.integral = 0.0f;
+    //     drive_speed_pid.integral = 0.0f;
+    // }
 
     // 速度环控制（20ms周期，每20个1ms周期执行一次）
     if (count % 20 == 0)
@@ -249,16 +202,14 @@ void control(void)
         angle_loop_control(0); // 速度环输出通过desired_angle传递
     }
 
+    // 角速度环控制（1ms周期，每次都执行）
+    gyro_loop_control((int)angle_gyro_target);
     // 行进轮速度环控制（20ms周期，每20个1ms周期执行一次）
     if (count % 20 == 0)
     {
 
         drive_speed_loop_control();
     }
-
-    // 角速度环控制（1ms周期，每次都执行）
-    gyro_loop_control((int)angle_gyro_target);
-
     // 防止计数器溢出
     if (count >= 1000)
     {

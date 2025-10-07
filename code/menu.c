@@ -413,6 +413,9 @@ Page page_imu = {
 // 5.1 Cargo运行函数
 void cargo_run_mode(void)
 {
+    // 清除保护状态（确保电机可以启动）
+    motor_reset_protection();
+
     // 启用PID控制
     enable = true;
 
@@ -420,24 +423,18 @@ void cargo_run_mode(void)
     ips_clear();
     show_string(0, 6, "Running...");
     show_string(0, 9, "Press BACK to exit");
-
-    // 在函数内部等待BACK键，确保退出时禁用enable
     while (1)
     {
+
+        // 检测退出
         if (Key_Scan() == KEY_BACK)
         {
-            enable = false; // 退出前确保禁用PID
-
-            // 立即停止两个电机（设置占空比为0）
-            pwm_set_duty(MOMENTUM_WHEEL_PWM, 0);
-            pwm_set_duty(DRIVE_WHEEL_PWM, 0);
-
-            break;
+            momentum_wheel_control(0);
+            drive_wheel_control(0);
+            enable = false; // 关闭PID控制
+            return;
         }
-        system_delay_ms(20);
     }
-
-    // 函数结束时，enable已经被设置为false，电机已停止
 }
 
 // 5.2 Cargo页面定义
@@ -627,6 +624,9 @@ void Menu_Enter(void)
                 {
                     if (Key_Scan() == KEY_BACK)
                     {
+                        // cargo模式的特殊退出处理（必须在Now_Menu改变之前判断）
+                        Page *current_page = Now_Menu; // 保存当前页面指针
+
                         // 返回父菜单
                         if (Now_Menu->back != NULL)
                         {
@@ -634,6 +634,18 @@ void Menu_Enter(void)
                             Now_Menu = Now_Menu->back;
                             need_refresh = 1;
                         }
+
+                        // 在返回后执行cargo的清理工作
+                        if (current_page == &page_cargo)
+                        {
+                            // 禁用PID控制
+                            enable = false;
+                            // 停止电机
+                            momentum_wheel_control(0);
+                            // 清除保护状态
+                            motor_reset_protection();
+                        }
+
                         break;
                     }
                     system_delay_ms(20);
