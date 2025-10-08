@@ -55,8 +55,8 @@ static float desired_angle = 0.0f;     // 期望角度（速度环输出）
 static float angle_gyro_target = 0.0f; // 目标角速度（角度环输出）
 
 // 一阶低通滤波器相关变量（仅对PID输出滤波）
-static float output_filter_coeff = 0.3f;   // 输出滤波系数 (0-1)
-static float filtered_motor_output = 0.0f; // 滤波后的电机输出
+float output_filter_coeff = 0.6f;   // 输出滤波系数 (0-1)，降低以增强平滑度
+float filtered_motor_output = 0.0f; // 滤波后的电机输出
 
 // 控制优化参数（导出到菜单）
 float angle_deadzone = 5.0f;      // 角度死区
@@ -101,23 +101,6 @@ void gyro_loop_control(int angle_control)
     // 将角度环输出作为角速度目标值
     float target_gyro = (float)angle_control;
 
-    // 角度保护：超出有效作用区间时停止电机
-    if (fabs(imu_data.pitch) > angle_protection)
-    {
-        // 清空所有积分项，避免积分饱和
-        angle_pid.integral = 0;
-        gyro_pid.integral = 0;
-        speed_pid.integral = 0;
-
-        // 重置输出滤波器状态
-        filtered_motor_output = 0.0f;
-
-        momentum_wheel_control(0);
-        drive_wheel_control(0);
-
-        return;
-    }
-
     // 使用IMU中已经滤波后的陀螺仪数据
     float current_gyro_y = (float)imu_data.gyro_y;
 
@@ -146,7 +129,7 @@ void angle_loop_control(int speed_control)
 }
 
 /**
- * @brief 速度环控制（最外环）
+ * @brief 速度环控制
  */
 void speed_loop_control(void)
 {
@@ -158,23 +141,23 @@ void speed_loop_control(void)
 }
 
 /**
- * @brief 主控制函数（多频率三环PID控制）
+ * @brief 主控制函数
  */
 void control(void)
 {
     count++;
-
-    // 传感器数据更新（始终执行，不受enable控制）
-
-    imu_update();
-
-    // 速度环周期采集编码器（20ms周期）
+    // 传感器数据更新
+    if (count % 2 == 0)
+    {
+        imu_update();
+    }
+    // 速度环周期采集编码器数据
     if (count % 20 == 0)
     {
         motor_encoder_update();
     }
-
-    // 如果未启用控制，停止电机并返回
+    // printf("%f,%d\r\n", imu_data.pitch, imu_data.gyro_y);
+    //  如果未启用控制，停止电机并返回
     if (!enable)
     {
         momentum_wheel_control(0);
@@ -204,8 +187,11 @@ void control(void)
         angle_loop_control(0); // 速度环输出通过desired_angle传递
     }
 
-    // 角速度环控制（1ms周期，每次都执行）
-    gyro_loop_control((int)angle_gyro_target);
+    // 角速度环控制（2ms周期，每次都执行）
+    if (count % 2 == 0)
+    {
+        gyro_loop_control((int)angle_gyro_target);
+    }
     // 行进轮速度环控制（20ms周期，每20个1ms周期执行一次）
     if (count % 20 == 0)
     {
@@ -217,7 +203,6 @@ void control(void)
     {
         count = 0;
     }
-   // printf("%f,%d\r\n", imu_data.pitch, imu_data.gyro_y);
 }
 
 /**

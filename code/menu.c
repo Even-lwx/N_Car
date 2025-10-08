@@ -288,14 +288,34 @@ Page page_drive_speed_pid = {
     .scroll_offset = 0,
 };
 
-// 3.6 PID主菜单页面（二级菜单，包含4个子菜单）
+// 3.5 输出平滑参数
+float filter_coeff_step[] = {0.01f, 0.05f, 0.1f}; // 滤波系数步进
+
+CustomData output_smooth_data[] = {
+    {&output_filter_coeff, data_float_show, "Filter Coeff", filter_coeff_step, 3, 0, 1, 2},
+    {&angle_protection, data_float_show, "Angle Protection", pid_limit_step, 3, 0, 5, 1},
+};
+
+Page page_output_smooth = {
+    .name = "Output Smooth",
+    .data = output_smooth_data,
+    .len = 2,
+    .stage = Menu,
+    .back = NULL, // Menu_Init 中设置
+    .enter = {NULL},
+    .content = {NULL},
+    .order = 0,
+    .scroll_offset = 0,
+};
+
+// 3.6 PID主菜单页面（二级菜单，包含5个子菜单）
 Page page_pid = {
     .name = "PID Params",
     .data = NULL, // 无参数，仅作为子菜单容器
-    .len = 4,     // 4个子菜单
+    .len = 5,     // 5个子菜单
     .stage = Menu,
     .back = NULL, // Menu_Init 中设置
-    .enter = {&page_gyro_pid, &page_angle_pid, &page_speed_pid, &page_drive_speed_pid},
+    .enter = {&page_gyro_pid, &page_angle_pid, &page_speed_pid, &page_drive_speed_pid, &page_output_smooth},
     .content = {NULL},
     .order = 0,
     .scroll_offset = 0,
@@ -570,6 +590,7 @@ void Menu_Init(void)
     page_angle_pid.back = &page_pid;
     page_speed_pid.back = &page_pid;
     page_drive_speed_pid.back = &page_pid;
+    page_output_smooth.back = &page_pid;
 
     // 设置IMU子页面的父页面指针（三级菜单）
     page_imu_params.back = &page_imu;
@@ -599,42 +620,15 @@ void Menu_Enter(void)
             ips_clear();
             need_refresh = 1;
 
-            // 如果进入的是功能页面，立即执行功能函数并等待退出
+            // 如果进入的是功能页面，立即执行功能函数
             if (Now_Menu->stage == Funtion && Now_Menu->content.function != NULL)
             {
                 // 执行功能函数（显示界面、初始化等）
                 Now_Menu->content.function();
 
-                // 进入等待循环，只响应BACK键退出
-                while (1)
-                {
-                    if (Key_Scan() == KEY_BACK)
-                    {
-                        // cargo模式的特殊退出处理（必须在Now_Menu改变之前判断）
-                        Page *current_page = Now_Menu; // 保存当前页面指针
-
-                        // 在返回前执行cargo的清理工作
-                        if (current_page == &page_cargo)
-                        {
-                            // 禁用PID控制并停止电机（motor_control_with_protection会检查enable）
-                            enable = false;
-                            momentum_wheel_control(0);
-                            drive_wheel_control(0);
-                            motor_reset_protection();
-                        }
-
-                        // 返回父菜单
-                        if (Now_Menu->back != NULL)
-                        {
-                            Now_Menu = Now_Menu->back;
-                        }
-
-                        ips_clear();
-                        need_refresh = 1;
-
-                        break;
-                    }
-                }
+                // 不再进入死循环，而是直接返回
+                // 由主循环根据 enable 标志位来决定是否刷新菜单
+                // 如果是 cargo 模式，enable 会被设置为 true，主循环会跳过菜单刷新
             }
         }
     }
@@ -679,6 +673,17 @@ void Menu_Back(void)
     else if (Now_Menu->stage == Funtion)
     {
         // 退出功能页面，返回到父菜单
+
+        // cargo模式的特殊退出处理
+        if (Now_Menu == &page_cargo)
+        {
+            // 禁用PID控制并停止电机
+            enable = false;
+            momentum_wheel_control(0);
+            drive_wheel_control(0);
+            motor_reset_protection();
+        }
+
         if (Now_Menu->back != NULL)
         {
             Now_Menu = Now_Menu->back;

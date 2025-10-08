@@ -65,11 +65,24 @@ int core0_main(void)
 
     while (1)
     {
-        // 显示菜单
-        menu_update();
-        
+        if (enable)
+        {
+            // Cargo 模式运行中，停止菜单刷新
+            // 在这里添加你需要在 Cargo 模式执行的代码
+
+            // 例如：实时显示调试信息
+            printf("%f,%d,%f\r\n", imu_data.pitch, imu_data.gyro_y, filtered_motor_output);
+
+            // 检测退出（BACK键由20ms中断处理，这里只需要检查enable状态）
+        }
+        else
+        {
+            // 正常菜单模式
+            menu_update();
+        }
+
         // 减少CPU占用
-        system_delay_ms(10);
+        system_delay_ms(20);
     }
 }
 

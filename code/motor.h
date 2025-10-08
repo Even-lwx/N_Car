@@ -10,9 +10,9 @@
 
 // 电机保护参数
 #define STALL_DETECT_PWM_THRESHOLD (3000)  // 堵转检测PWM阈值（超过此值才检测堵转）
-#define STALL_DETECT_ENCODER_THRESHOLD (5) // 堵转检测编码器阈值（低于此值认为堵转）
+#define STALL_DETECT_ENCODER_THRESHOLD (2) // 堵转检测编码器阈值（低于此值认为堵转）
 #define STALL_DETECT_TIME_MS (500)         // 堵转检测时间（毫秒）
-#define DIR_CHANGE_MIN_INTERVAL_MS (10)   // 方向切换最小间隔（毫秒）
+#define DIR_CHANGE_MIN_INTERVAL_MS (100)   // 方向切换最小间隔（毫秒）
 #define PROTECTION_DISABLE_TIME_MS (2000)  // 保护触发后禁用电机时间（毫秒）
 
 // 蜂鸣器引脚定义（根据实际硬件修改）

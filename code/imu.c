@@ -12,6 +12,8 @@ int16 gyro_z_offset = 0;
 uint32 machine_angle = 0; // 机械中值（去掉static，允许外部访问）
 
 // 二阶Butterworth低通滤波器结构体
+// 二阶Butterworth低通滤波器结构体（已禁用，不再使用）
+/*
 typedef struct
 {
     float b0, b1, b2; // 分子系数
@@ -22,12 +24,13 @@ typedef struct
 
 // 滤波器实例（仅对gyro_y滤波）
 static Butterworth2ndFilter gyro_y_filter;
+*/
 
 // 一阶互补滤波参数（只保留必要变量）
 static float angle_pitch_temp = 0.0f;
 uint8 gyro_ration = 4;     // 陀螺仪比例系数
 uint8 acc_ration = 4;      // 加速度计比例系数
-float call_cycle = 0.001f; // 调用周期（单位：秒）
+float call_cycle = 0.002f; // 调用周期（单位：秒）
 
 // *************************** 函数实现 ***************************
 
@@ -37,8 +40,15 @@ float call_cycle = 0.001f; // 调用周期（单位：秒）
 //              cutoff_freq     截止频率 (Hz)
 //              sample_freq     采样频率 (Hz)
 // 返回参数     void
-// 备注信息
 //-------------------------------------------------------------------------------------------------------------------
+// 函数简介     初始化二阶Butterworth低通滤波器（已禁用，不再使用）
+// 参数说明     filter          滤波器结构体指针
+//              cutoff_freq     截止频率 (Hz)
+//              sample_freq     采样频率 (Hz)
+// 返回参数     void
+// 备注信息     不需要滤波，保留代码仅供参考
+//-------------------------------------------------------------------------------------------------------------------
+/*
 static void butterworth_init(Butterworth2ndFilter *filter, float cutoff_freq, float sample_freq)
 {
     // 计算归一化截止频率
@@ -68,14 +78,15 @@ static void butterworth_init(Butterworth2ndFilter *filter, float cutoff_freq, fl
     filter->y1 = 0.0f;
     filter->y2 = 0.0f;
 }
-
+*/
 //-------------------------------------------------------------------------------------------------------------------
-// 函数简介     二阶Butterworth低通滤波器处理
+// 函数简介     二阶Butterworth低通滤波器处理（已禁用，不再使用）
 // 参数说明     filter          滤波器结构体指针
 //              input           输入值
 // 返回参数     float           滤波后的输出值
-// 备注信息
+// 备注信息     不需要滤波，保留代码仅供参考
 //-------------------------------------------------------------------------------------------------------------------
+/*
 static float butterworth_filter(Butterworth2ndFilter *filter, float input)
 {
     // 差分方程: y[n] = b0*x[n] + b1*x[n-1] + b2*x[n-2] - a1*y[n-1] - a2*y[n-2]
@@ -93,6 +104,7 @@ static float butterworth_filter(Butterworth2ndFilter *filter, float input)
 
     return output;
 }
+*/
 
 //-------------------------------------------------------------------------------------------------------------------
 // 函数简介     IMU初始化函数
@@ -123,8 +135,8 @@ uint8 imu_init(void)
         }
     }
 
-    // 初始化Butterworth滤波器（仅对gyro_y滤波，截止频率10Hz, 采样频率1000Hz）
-    butterworth_init(&gyro_y_filter, 10.0f, 1000.0f);
+    // 初始化Butterworth滤波器（已禁用，不再使用）
+    // butterworth_init(&gyro_y_filter, 10.0f, 1000.0f);
 
     return imu_data.is_initialized ? 1 : 0;
 }
@@ -150,21 +162,22 @@ void imu_get_data(void)
     // 获取陀螺仪数据并应用零偏
     imu660rb_get_gyro();
     imu_data.gyro_x = imu660rb_gyro_x + gyro_x_offset;
+    imu_data.gyro_y = imu660rb_gyro_y + gyro_y_offset;
     imu_data.gyro_z = imu660rb_gyro_z + gyro_z_offset;
 
-    // gyro_x和gyro_z死区处理（不滤波）
+    // 死区处理（不滤波）
     if (imu_data.gyro_x > -5 && imu_data.gyro_x < 5)
         imu_data.gyro_x = 0;
+    if (imu_data.gyro_y > -5 && imu_data.gyro_y < 5)
+        imu_data.gyro_y = 0;
     if (imu_data.gyro_z > -5 && imu_data.gyro_z < 5)
         imu_data.gyro_z = 0;
 
-    // gyro_y进行滤波处理
-    float raw_gyro_y = (float)(imu660rb_gyro_y + gyro_y_offset);
-    if (raw_gyro_y > -5.0f && raw_gyro_y < 5.0f)
-        raw_gyro_y = 0.0f;
-
-    // 滤波处理
-    imu_data.gyro_y = (int16)butterworth_filter(&gyro_y_filter, raw_gyro_y);
+    // gyro_y滤波处理（已禁用，不需要滤波）
+    // float raw_gyro_y = (float)(imu660rb_gyro_y + gyro_y_offset);
+    // if (raw_gyro_y > -5.0f && raw_gyro_y < 5.0f)
+    //     raw_gyro_y = 0.0f;
+    // imu_data.gyro_y = (int16)butterworth_filter(&gyro_y_filter, raw_gyro_y);
 
     // 输出原始数据和滤波后的数据
     // printf("%d,%d\r\n", imu_data.gyro_y, (int16)raw_gyro_y);
@@ -218,10 +231,7 @@ void imu_calibrate_gyro(uint16 sample_count)
     int32 gyro_y_sum = 0;
     int32 gyro_z_sum = 0;
 
-    // 暂存原零偏值，采样期间临时设为0
-    int16 temp_x = gyro_x_offset;
-    int16 temp_y = gyro_y_offset;
-    int16 temp_z = gyro_z_offset;
+    // 采样期间临时设为0（保证读取未校正的原始数据）
     gyro_x_offset = 0;
     gyro_y_offset = 0;
     gyro_z_offset = 0;

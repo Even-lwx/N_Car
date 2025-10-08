@@ -44,9 +44,10 @@ extern float target_speed;       // 目标速度
 extern float target_gyro_rate;   // 目标角速度
 extern float target_drive_speed; // 行进轮目标速度
 
-extern float filtered_angle; // 滤波后的角度
-extern float filtered_speed; // 滤波后的速度
-extern float filtered_gyro;  // 滤波后的角速度
+extern float filtered_angle;        // 滤波后的角度
+extern float filtered_speed;        // 滤波后的速度
+extern float filtered_gyro;         // 滤波后的角速度
+extern float filtered_motor_output; // 滤波后的电机输出
 
 // 控制标志
 extern volatile bool enable; // 使能标志（volatile防止编译器优化）
@@ -60,6 +61,9 @@ extern float angle_deadzone;   // 角度死区
 extern float angle_protection; // 角度保护阈值
 extern float angle_gain_scale; // 角度环死区增益缩放
 extern float gyro_gain_scale;  // 角速度环死区增益缩放
+
+// 输出平滑参数（导出到菜单）
+extern float output_filter_coeff; // 输出滤波系数
 
 // 函数声明
 void pid_init(void);

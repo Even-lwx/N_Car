@@ -1,6 +1,8 @@
 // *************************** 头文件包含 ***************************
 #include "motor.h"
 #include "buzzer.h"
+#include "imu.h"
+#include "pid.h"
 #include "zf_common_headfile.h"
 
 // *************************** 全局变量定义 ***************************
@@ -15,9 +17,10 @@ extern volatile bool enable; // PID使能标志(定义在pid.c中)
 // 保护触发原因枚举
 typedef enum
 {
-    PROTECT_NONE = 0,      // 无保护
-    PROTECT_STALL = 1,     // 堵转保护
-    PROTECT_DIR_CHANGE = 2 // 方向切换过快保护
+    PROTECT_NONE = 0,       // 无保护
+    PROTECT_STALL = 1,      // 堵转保护
+    PROTECT_DIR_CHANGE = 2, // 方向切换过快保护
+    PROTECT_ANGLE = 3       // 角度超限保护
 } protect_reason_t;
 
 // 电机保护状态结构体
@@ -42,6 +45,9 @@ static uint32 protection_tick_count = 0; // 保护更新计数器（每次调用
 // *************************** 内部函数声明 ***************************
 static void motor_control_with_protection(uint8 motor_id, int16 pwm_value, uint32 pwm_pin, uint32 dir_pin);
 static void trigger_protection(uint8 motor_id, protect_reason_t reason);
+static void check_angle_protection(void);
+static void check_stall_protection(uint8 motor_id);
+static void check_direction_change_protection(uint8 motor_id);
 
 // *************************** 函数实现 ***************************
 
@@ -160,7 +166,7 @@ void motor_encoder_update(void)
 // 参数说明     motor_id: 电机ID (0=动量轮, 1=行进轮)
 //              reason: 保护原因
 // 返回参数     void
-// 备注信息     触发保护时会启动蜂鸣器报警
+// 备注信息     触发保护时会禁用PID系统、停止电机并启动蜂鸣器报警
 //-------------------------------------------------------------------------------------------------------------------
 static void trigger_protection(uint8 motor_id, protect_reason_t reason)
 {
@@ -174,11 +180,14 @@ static void trigger_protection(uint8 motor_id, protect_reason_t reason)
     protect->protect_reason = reason;
     protect->protect_start_count = protection_tick_count;
 
+    // 禁用PID控制系统（与倒地保护相同）
+    enable = false;
+
     // 立即停止所有电机（统一保护：一个电机触发保护，所有电机都停止）
     pwm_set_duty(MOMENTUM_WHEEL_PWM, 0);
     pwm_set_duty(DRIVE_WHEEL_PWM, 0);
 
-    // 启动蜂鸣器报警（响3声，每声100ms，间隔100ms）
+    // 启动蜂鸣器报警（响2声，每声100ms，间隔100ms）
     if (!buzzer_is_active())
     {
         buzzer_beep(BUZZER_BEEP_COUNT, BUZZER_BEEP_DURATION_MS, BUZZER_BEEP_INTERVAL_MS);
@@ -190,67 +199,156 @@ static void trigger_protection(uint8 motor_id, protect_reason_t reason)
 // 参数说明     void
 // 返回参数     void
 // 使用示例     motor_protection_update(); // 在control()函数中调用
-// 备注信息     负责堵转检测、保护自动解除等
+// 备注信息     负责堵转检测、角度保护、方向切换保护等
 //-------------------------------------------------------------------------------------------------------------------
 void motor_protection_update(void)
 {
-    protection_tick_count++; // 更新计数器（每次调用+1，假设1ms周期）
+    // 更新保护系统时间计数器
+    protection_tick_count++;
 
-    // 遍历两个电机进行保护检测
+    // 1. 角度保护检查（最高优先级，影响所有电机）
+    check_angle_protection();
+
+    // 如果角度保护触发，直接返回，不再进行其他检测
+    if (motor_protect[0].is_protected || motor_protect[1].is_protected)
+    {
+        return;
+    }
+
+    // 2. 遍历每个电机进行独立保护检测
     for (uint8 i = 0; i < 2; i++)
     {
-        motor_protection_t *protect = &motor_protect[i];
-
-        // 如果处于保护状态，禁止自动解除，必须手动调用 motor_reset_protection()
-        if (protect->is_protected)
+        // 如果该电机已处于保护状态，跳过检测（需手动解除保护）
+        if (motor_protect[i].is_protected)
         {
-            // 保持保护状态，等待菜单操作解除
             continue;
+        }
+
+        // 2.1 堵转保护检测
+        check_stall_protection(i);
+
+        // 2.2 方向切换保护检测
+        //check_direction_change_protection(i);
+    }
+}
+
+//-------------------------------------------------------------------------------------------------------------------
+// 函数简介     角度保护检测（内部函数）
+// 参数说明     void
+// 返回参数     void
+// 备注信息     检测pitch角度是否超限，超限时触发保护并清空PID积分项
+//-------------------------------------------------------------------------------------------------------------------
+static void check_angle_protection(void)
+{
+    static bool angle_protect_triggered = false;
+
+    // 检查角度是否超出保护阈值
+    if (fabs(imu_data.pitch) > angle_protection)
+    {
+        // 防止重复触发
+        if (!angle_protect_triggered)
+        {
+            // 触发角度保护
+            trigger_protection(0, PROTECT_ANGLE);
+            angle_protect_triggered = true;
+
+            // 清空所有PID积分项，避免积分饱和
+            extern PID_Controller angle_pid, gyro_pid, speed_pid;
+            angle_pid.integral = 0;
+            gyro_pid.integral = 0;
+            speed_pid.integral = 0;
+
+            // 重置输出滤波器状态
+            extern float filtered_motor_output;
+            filtered_motor_output = 0.0f;
+        }
+    }
+    else
+    {
+        // 角度恢复正常，允许再次触发保护
+        angle_protect_triggered = false;
+    }
+}
+
+//-------------------------------------------------------------------------------------------------------------------
+// 函数简介     堵转保护检测（内部函数）
+// 参数说明     motor_id: 电机ID (0=动量轮, 1=行进轮)
+// 返回参数     void
+// 备注信息     检测PWM高但编码器反馈低的情况，连续检测超过阈值时间则触发保护
+//-------------------------------------------------------------------------------------------------------------------
+static void check_stall_protection(uint8 motor_id)
+{
+    if (motor_id >= 2)
+        return;
+
+    motor_protection_t *protect = &motor_protect[motor_id];
+
+    // 计算PWM和编码器的绝对值
+    int16 abs_pwm = (protect->last_pwm >= 0) ? protect->last_pwm : -protect->last_pwm;
+    int16 abs_encoder = (encoder[motor_id] >= 0) ? encoder[motor_id] : -encoder[motor_id];
+
+    // 判断是否满足堵转条件：PWM高但编码器反馈低
+    if (abs_pwm > STALL_DETECT_PWM_THRESHOLD && abs_encoder < STALL_DETECT_ENCODER_THRESHOLD)
+    {
+        // 累加堵转检测计数器
+        protect->stall_detect_count++;
+
+        // 连续检测到堵转超过阈值时间，触发保护
+        if (protect->stall_detect_count >= STALL_DETECT_TIME_MS)
+        {
+            trigger_protection(motor_id, PROTECT_STALL);
+            protect->stall_detect_count = 0; // 重置计数器
+        }
+    }
+    else
+    {
+        // 未检测到堵转，清零计数器
+        protect->stall_detect_count = 0;
+    }
+}
+
+//-------------------------------------------------------------------------------------------------------------------
+// 函数简介     方向切换保护检测（内部函数）
+// 参数说明     motor_id: 电机ID (0=动量轮, 1=行进轮)
+// 返回参数     void
+// 备注信息     检测方向切换是否过快，过快则触发保护
+//-------------------------------------------------------------------------------------------------------------------
+static void check_direction_change_protection(uint8 motor_id)
+{
+    if (motor_id >= 2)
+        return;
+
+    motor_protection_t *protect = &motor_protect[motor_id];
+
+    // 根据PWM符号确定当前方向 (1=正转, 0=反转)
+    int8 current_dir = (protect->last_pwm >= 0) ? 1 : 0;
+
+    // 检查是否发生方向切换（排除首次运行的情况）
+    if (protect->last_dir != -1 && protect->last_dir != current_dir)
+    {
+        // 计算距离上次方向切换的时间间隔
+        uint32 time_since_last_change = protection_tick_count - protect->last_dir_change_count;
+
+        // 判断切换间隔是否过短
+        if (time_since_last_change < DIR_CHANGE_MIN_INTERVAL_MS)
+        {
+            // 方向切换过快，触发保护
+            trigger_protection(motor_id, PROTECT_DIR_CHANGE);
         }
         else
         {
-            // 堵转检测：PWM较高但编码器反馈很低
-            int16 abs_pwm = (protect->last_pwm >= 0) ? protect->last_pwm : -protect->last_pwm;
-            int16 abs_encoder = (encoder[i] >= 0) ? encoder[i] : -encoder[i];
-
-            if (abs_pwm > STALL_DETECT_PWM_THRESHOLD && abs_encoder < STALL_DETECT_ENCODER_THRESHOLD)
-            {
-                protect->stall_detect_count++;
-
-                // 连续检测到堵转超过阈值次数（500次 = 500ms）
-                if (protect->stall_detect_count >= STALL_DETECT_TIME_MS)
-                {
-                    trigger_protection(i, PROTECT_STALL);
-                    protect->stall_detect_count = 0;
-                }
-            }
-            else
-            {
-                // 未检测到堵转，清零计数器
-                protect->stall_detect_count = 0;
-            }
-
-            // 方向切换保护检测
-            int8 current_dir = (protect->last_pwm >= 0) ? 1 : 0;
-
-            // 检测方向是否改变
-            if (protect->last_dir != -1 && protect->last_dir != current_dir)
-            {
-                // 检查方向切换间隔（计数差值）
-                uint32 count_since_last_change = protection_tick_count - protect->last_dir_change_count;
-
-                if (count_since_last_change < DIR_CHANGE_MIN_INTERVAL_MS)
-                {
-                    // 方向切换过快，触发保护
-                    trigger_protection(i, PROTECT_DIR_CHANGE);
-                }
-                else
-                {
-                    // 方向切换允许，更新计数值
-                    protect->last_dir_change_count = protection_tick_count;
-                    protect->last_dir = current_dir;
-                }
-            }
+            // 方向切换间隔正常，更新记录
+            protect->last_dir_change_count = protection_tick_count;
+            protect->last_dir = current_dir;
+        }
+    }
+    else
+    {
+        // 首次运行或方向未改变，更新当前方向
+        if (protect->last_dir == -1)
+        {
+            protect->last_dir = current_dir;
+            protect->last_dir_change_count = protection_tick_count;
         }
     }
 }
