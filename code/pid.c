@@ -47,7 +47,7 @@ float target_speed = 0.0f;        // 目标速度
 float target_drive_speed = 10.0f; // 行进轮目标速度
 
 // 控制标志
-bool enable = false; // 使能标志，默认禁用（需在Cargo模式中启用）
+volatile bool enable = false; // 使能标志，默认禁用（需在Cargo模式中启用）
 
 // 控制变量
 static uint32_t count = 0;             // 控制计数器
@@ -128,7 +128,7 @@ void gyro_loop_control(int angle_control)
     // filtered_value = α * current_value + (1-α) * previous_filtered_value
     filtered_motor_output = output_filter_coeff * motor_output + (1.0f - output_filter_coeff) * filtered_motor_output;
 
-    // 控制电机（使用滤波后的输出）
+    // 控制电机（motor_control_with_protection内部会检查enable标志）
     momentum_wheel_control((int16_t)filtered_motor_output);
 }
 
@@ -174,9 +174,11 @@ void control(void)
         motor_encoder_update();
     }
 
-    // 如果未启用控制，传感器数据已更新，直接返回不执行PID
+    // 如果未启用控制，停止电机并返回
     if (!enable)
     {
+        momentum_wheel_control(0);
+        drive_wheel_control(0);
         return;
     }
     motor_protection_update();
@@ -215,6 +217,7 @@ void control(void)
     {
         count = 0;
     }
+   // printf("%f,%d\r\n", imu_data.pitch, imu_data.gyro_y);
 }
 
 /**

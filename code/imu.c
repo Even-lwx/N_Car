@@ -218,17 +218,31 @@ void imu_calibrate_gyro(uint16 sample_count)
     int32 gyro_y_sum = 0;
     int32 gyro_z_sum = 0;
 
-    // 采样
+    // 暂存原零偏值，采样期间临时设为0
+    int16 temp_x = gyro_x_offset;
+    int16 temp_y = gyro_y_offset;
+    int16 temp_z = gyro_z_offset;
+    gyro_x_offset = 0;
+    gyro_y_offset = 0;
+    gyro_z_offset = 0;
+
+    // 采样（利用中断中更新的数据，避免总线冲突）
     for (uint16 i = 0; i < sample_count; i++)
     {
-        // 获取陀螺仪原始数据
-        imu660rb_get_gyro();
-        gyro_x_sum += imu660rb_gyro_x;
-        gyro_y_sum += imu660rb_gyro_y;
-        gyro_z_sum += imu660rb_gyro_z;
+        // 等待数据更新标志（由1ms中断设置）
+        imu_data.data_ready = false;
+        while (!imu_data.data_ready)
+        {
+            // 等待中断更新数据
+        }
+
+        // 累加未校正的陀螺仪数据
+        gyro_x_sum += imu_data.gyro_x;
+        gyro_y_sum += imu_data.gyro_y;
+        gyro_z_sum += imu_data.gyro_z;
     }
 
-    // 计算平均值作为零偏（原始数据）
+    // 计算平均值作为零偏
     gyro_x_offset = -(int16)(gyro_x_sum / sample_count);
     gyro_y_offset = -(int16)(gyro_y_sum / sample_count);
     gyro_z_offset = -(int16)(gyro_z_sum / sample_count);

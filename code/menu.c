@@ -340,8 +340,7 @@ void gyro_calibration_wrapper(void)
     show_string(0, 6, "stable...");
     show_string(0, 9, "Starting in 2s");
 
-    // 延迟2秒后蜂鸣器响一声，提示开始校准
-    system_delay_ms(2000);
+    // 蜂鸣器响一声，提示开始校准
     buzzer_beep(1, 50, 100);
 
     // 检查IMU是否初始化
@@ -358,8 +357,8 @@ void gyro_calibration_wrapper(void)
     show_string(0, 4, "Calibrating...");
     show_string(0, 7, "Please wait");
 
-    // 执行校准（采样500次，约0.5秒）
-    imu_calibrate_gyro(5000);
+    // 执行校准（采样1000次，约1秒）
+    imu_calibrate_gyro(1000);
 
     // 保存参数到Flash
     Param_Save_All();
@@ -423,18 +422,6 @@ void cargo_run_mode(void)
     ips_clear();
     show_string(0, 6, "Running...");
     show_string(0, 9, "Press BACK to exit");
-    while (1)
-    {
-
-        // 检测退出
-        if (Key_Scan() == KEY_BACK)
-        {
-            momentum_wheel_control(0);
-            drive_wheel_control(0);
-            enable = false; // 关闭PID控制
-            return;
-        }
-    }
 }
 
 // 5.2 Cargo页面定义
@@ -485,8 +472,6 @@ void debug_monitor_mode(void)
         {
             break;
         }
-
-        system_delay_ms(50); // 20Hz刷新率
     }
 }
 
@@ -607,11 +592,12 @@ void Menu_Enter(void)
         // 如果存在子菜单则进入子菜单
         if (Now_Menu->enter[Now_Menu->order] != NULL)
         {
-            ips_clear(); // 立即清屏
             Now_Menu = Now_Menu->enter[Now_Menu->order];
             Now_Menu->order = 0;
             Now_Menu->scroll_offset = 0; // 重置滚动偏移
-            need_refresh = 1;            // 进入子菜单时请求刷新屏幕
+
+            ips_clear();
+            need_refresh = 1;
 
             // 如果进入的是功能页面，立即执行功能函数并等待退出
             if (Now_Menu->stage == Funtion && Now_Menu->content.function != NULL)
@@ -627,28 +613,27 @@ void Menu_Enter(void)
                         // cargo模式的特殊退出处理（必须在Now_Menu改变之前判断）
                         Page *current_page = Now_Menu; // 保存当前页面指针
 
-                        // 返回父菜单
-                        if (Now_Menu->back != NULL)
-                        {
-                            ips_clear();
-                            Now_Menu = Now_Menu->back;
-                            need_refresh = 1;
-                        }
-
-                        // 在返回后执行cargo的清理工作
+                        // 在返回前执行cargo的清理工作
                         if (current_page == &page_cargo)
                         {
-                            // 禁用PID控制
+                            // 禁用PID控制并停止电机（motor_control_with_protection会检查enable）
                             enable = false;
-                            // 停止电机
                             momentum_wheel_control(0);
-                            // 清除保护状态
+                            drive_wheel_control(0);
                             motor_reset_protection();
                         }
 
+                        // 返回父菜单
+                        if (Now_Menu->back != NULL)
+                        {
+                            Now_Menu = Now_Menu->back;
+                        }
+
+                        ips_clear();
+                        need_refresh = 1;
+
                         break;
                     }
-                    system_delay_ms(20);
                 }
             }
         }
@@ -674,9 +659,10 @@ void Menu_Back(void)
         // 返回到父菜单
         if (Now_Menu->back != NULL)
         {
-            ips_clear(); // 立即清屏
             Now_Menu = Now_Menu->back;
-            need_refresh = 1; // 返回父菜单时请求刷新屏幕
+
+            ips_clear();
+            need_refresh = 1;
         }
     }
     else if (Now_Menu->stage == Change)
@@ -685,18 +671,20 @@ void Menu_Back(void)
         // 自动保存参数到 Flash
         Param_Save_All();
 
-        ips_clear(); // 立即清屏
         Now_Menu->stage = Menu;
-        need_refresh = 1; // 退出调参模式时请求刷新屏幕
+
+        ips_clear();
+        need_refresh = 1;
     }
     else if (Now_Menu->stage == Funtion)
     {
         // 退出功能页面，返回到父菜单
         if (Now_Menu->back != NULL)
         {
-            ips_clear(); // 立即清屏
             Now_Menu = Now_Menu->back;
-            need_refresh = 1; // 返回父菜单时请求刷新屏幕
+
+            ips_clear();
+            need_refresh = 1;
         }
     }
 }
@@ -915,6 +903,14 @@ void ips_clear_line(uint16 x, uint16 y, uint8 len)
  */
 void Menu_Show(void)
 {
+    // 安全检查：确保Now_Menu有效
+    if (Now_Menu == NULL)
+    {
+        Now_Menu = &main_page;
+        need_refresh = 1;
+        return;
+    }
+
     static uint8 last_stage = 0xFF; // 记录页面类型变化
     uint8 full_redraw = 0;          // 全量重绘标志
 
@@ -930,7 +926,10 @@ void Menu_Show(void)
     // 在 Menu 模式下显示页面标题
     if (Now_Menu->stage == Menu)
     {
-        show_string(1, 0, Now_Menu->name);
+        if (Now_Menu->name != NULL)
+        {
+            show_string(1, 0, Now_Menu->name);
+        }
     }
 
     if (Now_Menu->stage == Menu)
@@ -1141,6 +1140,14 @@ void Key_operation(uint8 key)
  */
 void menu_update(void)
 {
+    // 安全检查
+    if (Now_Menu == NULL)
+    {
+        Now_Menu = &main_page;
+        ips_clear();
+        need_refresh = 1;
+    }
+
     // 扫描按键
     uint8 key = Key_Scan();
 
