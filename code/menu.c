@@ -1,15 +1,18 @@
 /*********************************************************************
- * 文件: menu_clean.c
- * 精简的菜单系统实现（用于 IPS114 显示屏）
- * 从 IPS200 菜单系统改编，已移除所有业务逻辑，仅保留通用框架
+ * 文件: menu.c
+ * 菜单系统内核实现（用于 IPS114 显示屏）
+ * 说明：本文件为菜单系统内核，提供通用框架功能
+ *       用户配置请修改 menu_config.c 文件
  ********************************************************************/
 
 #include "menu.h"
+#include "menu_config.h"
 #include "zf_common_headfile.h"
 #include "pid.h"
 #include "imu.h"
 #include "motor.h"
 #include "servo.h"
+#include "param_save.h"
 /**************** 函数声明 ****************/
 void ips_clear(void);
 void show_string(uint16 x, uint16 y, const char *str);
@@ -18,6 +21,7 @@ void show_float(uint16 x, uint16 y, float value, uint8 num, uint8 pointnum);
 
 /**************** 页面前置声明 ****************/
 extern Page main_page;
+extern Page page_cargo; // Cargo运行模式页面（用于特殊退出处理）
 
 /**************** 全局变量 ****************/
 
@@ -98,476 +102,6 @@ uint8 Key_Scan(void)
     return key_value;
 }
 
-/**************** 菜单参数与页面配置区 ****************/
-/*
- * 使用说明：
- * 1. 先定义参数变量
- * 2. 再定义对应的步进数组（调参用）
- * 3. 然后配置 CustomData 数组
- * 4. 最后定义 Page 页面结构
- *
- * 注意：
- * - Debug 监控页面的参数不需要步进数组（只读显示）
- * - 步进数组的长度可以灵活配置（1~N个步进值）
- */
-
-//============================================================
-// 1. 示例菜单 - Example Menu
-//============================================================
-// 1.1 参数变量定义
-float example_float1 = 1.5f;
-float example_float2 = 2.0f;
-int16 example_int16_1 = 100;
-int16 example_int16_2 = 200;
-uint32 example_uint32 = 1000;
-
-// 1.2 步进数组定义
-float float1_step[] = {0.01f, 0.1f, 1.0f}; // 3 个步进档位
-float float2_step[] = {0.1f, 0.5f};        // 2 个步进档位
-int16 int16_1_step[] = {1, 10, 100};       // 3 个步进档位
-int16 int16_2_step[] = {5, 50};            // 2 个步进档位
-uint32 uint32_step[] = {1, 10, 100, 1000}; // 4 个步进档位
-
-// 1.3 参数配置数组
-CustomData example_data[] = {
-    // 变量地址          类型              显示名称         步进数组        步进数  索引  整数位  小数位
-    {&example_float1, data_float_show, "Float Param 1", float1_step, 3, 0, 4, 4},
-    {&example_float2, data_float_show, "Float Param 2", float2_step, 2, 0, 4, 4},
-    {&example_int16_1, data_int16_show, "Int16 Param 1", int16_1_step, 3, 0, 4, 4},
-    {&example_int16_2, data_int16_show, "Int16 Param 2", int16_2_step, 2, 0, 4, 4},
-    {&example_uint32, data_uint32_show, "Uint32 Param", uint32_step, 4, 0, 4, 4},
-};
-
-// 1.4 页面定义
-Page page_example = {
-    .name = "Example Menu",
-    .data = example_data,
-    .len = 5,
-    .stage = Menu,
-    .back = NULL, // Menu_Init 中设置
-    .enter = {NULL},
-    .content = {NULL},
-    .order = 0,
-    .scroll_offset = 0,
-};
-
-//============================================================
-// 2. 舵机控制菜单 - Servo Control Menu
-//============================================================
-// 2.1 步进数组定义
-float servo_angle_step[] = {0.5f, 1.0f, 5.0f}; // 舵机角度步进
-
-// 2.2 参数配置数组
-CustomData servo_data[] = {
-    // 变量地址          类型              显示名称         步进数组           步进数  索引  整数位  小数位
-    {&servo_motor_duty, data_float_show, "Servo Angle", servo_angle_step, 3, 0, 4, 1},
-};
-
-// 2.3 页面定义
-Page page_servo = {
-
-    .name = "Servo Control",
-    .data = servo_data,
-    .len = 1,
-    .stage = Menu,
-    .back = NULL, // Menu_Init 中设置
-    .enter = {NULL},
-    .content = {NULL},
-    .order = 0,
-    .scroll_offset = 0,
-};
-
-//============================================================
-// 3. PID参数菜单 - PID Parameters (三级菜单结构)
-//============================================================
-// 说明：调整三个串级PID控制器的参数
-// - 角速度环PID (gyro_pid)  : 最内环，直接控制电机输出
-// - 角度环PID   (angle_pid) : 中间环，输出作为角速度环目标
-// - 速度环PID   (speed_pid) : 最外环，输出作为角度环目标偏移
-
-// 3.1 步进数组定义（统一的PID参数步进）
-float pid_kp_step[] = {0.01f, 0.1f, 1.0f, 10.0f, 100.0f}; // Kp步进
-float pid_ki_step[] = {0.01f, 0.1f, 1.0f, 10.0f, 100.0f}; // Ki步进
-float pid_kd_step[] = {0.01f, 0.1f, 1.0f, 10.0f, 100.0f}; // Kd步进
-float pid_limit_step[] = {1.0f, 10.0f, 100.0f};           // 限幅步进
-
-// 3.2 角速度环PID参数
-float gain_scale_step[] = {0.01f, 0.1f, 0.2f}; // 增益缩放步进
-
-CustomData gyro_pid_data[] = {
-    // 变量地址                 类型              显示名称         步进数组        步进数  索引  整数位  小数位
-    {&gyro_pid.kp, data_float_show, "Kp", pid_kp_step, 5, 0, 4, 3},
-    {&gyro_pid.ki, data_float_show, "Ki", pid_ki_step, 5, 0, 4, 3},
-    {&gyro_pid.kd, data_float_show, "Kd", pid_kd_step, 5, 0, 4, 4},
-    {&gyro_pid.max_integral, data_float_show, "Max Integral", pid_limit_step, 3, 0, 5, 1},
-    {&gyro_pid.max_output, data_float_show, "Max Output", pid_limit_step, 3, 0, 5, 1},
-    {&gyro_gain_scale, data_float_show, "Gain Scale", gain_scale_step, 3, 0, 3, 2},
-};
-
-Page page_gyro_pid = {
-    .name = "Gyro PID",
-    .data = gyro_pid_data,
-    .len = 6,
-    .stage = Menu,
-    .back = NULL, // Menu_Init 中设置
-    .enter = {NULL},
-    .content = {NULL},
-    .order = 0,
-    .scroll_offset = 0,
-};
-
-// 3.3 角度环PID参数
-uint32 machine_angle_step[] = {1, 10, 100};        // 机械中值步进
-float deadzone_step[] = {0.1f, 1.0f, 5.0f, 10.0f}; // 死区步进
-
-CustomData angle_pid_data[] = {
-    {&machine_angle, data_uint32_show, "Mech Zero", machine_angle_step, 3, 0, 5, 0},
-    {&angle_pid.kp, data_float_show, "Kp", pid_kp_step, 5, 0, 4, 3},
-    {&angle_pid.ki, data_float_show, "Ki", pid_ki_step, 5, 0, 4, 3},
-    {&angle_pid.kd, data_float_show, "Kd", pid_kd_step, 5, 0, 4, 4},
-    {&angle_pid.max_integral, data_float_show, "Max Integral", pid_limit_step, 3, 0, 5, 1},
-    {&angle_pid.max_output, data_float_show, "Max Output", pid_limit_step, 3, 0, 5, 1},
-    {&angle_deadzone, data_float_show, "Angle Deadzone", deadzone_step, 4, 0, 4, 1},
-    {&angle_gain_scale, data_float_show, "Gain Scale", gain_scale_step, 3, 0, 3, 2},
-};
-
-Page page_angle_pid = {
-    .name = "Angle PID",
-    .data = angle_pid_data,
-    .len = 8,
-    .stage = Menu,
-    .back = NULL, // Menu_Init 中设置
-    .enter = {NULL},
-    .content = {NULL},
-    .order = 0,
-    .scroll_offset = 0,
-};
-
-// 3.4 速度环PID参数
-CustomData speed_pid_data[] = {
-    {&speed_pid.kp, data_float_show, "Kp", pid_kp_step, 5, 0, 4, 3},
-    {&speed_pid.ki, data_float_show, "Ki", pid_ki_step, 5, 0, 4, 3},
-    {&speed_pid.kd, data_float_show, "Kd", pid_kd_step, 5, 0, 4, 4},
-    {&speed_pid.max_integral, data_float_show, "Max Integral", pid_limit_step, 3, 0, 5, 1},
-    {&speed_pid.max_output, data_float_show, "Max Output", pid_limit_step, 3, 0, 5, 1},
-};
-
-Page page_speed_pid = {
-    .name = "Speed PID",
-    .data = speed_pid_data,
-    .len = 5,
-    .stage = Menu,
-    .back = NULL, // Menu_Init 中设置
-    .enter = {NULL},
-    .content = {NULL},
-    .order = 0,
-    .scroll_offset = 0,
-};
-
-// 3.5 行进轮速度环PID参数
-float target_speed_step[] = {1.0f, 10.0f, 100.0f}; // 目标速度步进
-
-CustomData drive_speed_pid_data[] = {
-    {&target_drive_speed, data_float_show, "Target Speed", target_speed_step, 3, 0, 5, 1},
-    {&drive_speed_pid.kp, data_float_show, "Kp", pid_kp_step, 5, 0, 4, 3},
-    {&drive_speed_pid.ki, data_float_show, "Ki", pid_ki_step, 5, 0, 4, 3},
-    {&drive_speed_pid.kd, data_float_show, "Kd", pid_kd_step, 5, 0, 4, 4},
-    {&drive_speed_pid.max_integral, data_float_show, "Max Integral", pid_limit_step, 3, 0, 5, 1},
-    {&drive_speed_pid.max_output, data_float_show, "Max Output", pid_limit_step, 3, 0, 5, 1},
-};
-
-Page page_drive_speed_pid = {
-    .name = "Drive Speed PID",
-    .data = drive_speed_pid_data,
-    .len = 6,
-    .stage = Menu,
-    .back = NULL, // Menu_Init 中设置
-    .enter = {NULL},
-    .content = {NULL},
-    .order = 0,
-    .scroll_offset = 0,
-};
-
-// 3.5 输出平滑参数
-float filter_coeff_step[] = {0.01f, 0.05f, 0.1f}; // 滤波系数步进
-
-CustomData output_smooth_data[] = {
-    {&output_filter_coeff, data_float_show, "Filter Coeff", filter_coeff_step, 3, 0, 1, 2},
-    {&angle_protection, data_float_show, "Angle Protection", pid_limit_step, 3, 0, 5, 1},
-};
-
-Page page_output_smooth = {
-    .name = "Output Smooth",
-    .data = output_smooth_data,
-    .len = 2,
-    .stage = Menu,
-    .back = NULL, // Menu_Init 中设置
-    .enter = {NULL},
-    .content = {NULL},
-    .order = 0,
-    .scroll_offset = 0,
-};
-
-// 3.6 PID主菜单页面（二级菜单，包含5个子菜单）
-Page page_pid = {
-    .name = "PID Params",
-    .data = NULL, // 无参数，仅作为子菜单容器
-    .len = 5,     // 5个子菜单
-    .stage = Menu,
-    .back = NULL, // Menu_Init 中设置
-    .enter = {&page_gyro_pid, &page_angle_pid, &page_speed_pid, &page_drive_speed_pid, &page_output_smooth},
-    .content = {NULL},
-    .order = 0,
-    .scroll_offset = 0,
-};
-
-//============================================================
-// 4. IMU菜单 - IMU
-//============================================================
-
-// 4.1 IMU参数页面（陀螺仪零偏）
-// 4.1.1 参数步进数组
-int16 gyro_offset_step[] = {1, 10, 100};
-
-// 4.1.2 参数配置数组
-CustomData imu_data_params[] = {
-    {&gyro_x_offset, data_int16_show, "Gyro X Offset", gyro_offset_step, 3, 0, 5, 0},
-    {&gyro_y_offset, data_int16_show, "Gyro Y Offset", gyro_offset_step, 3, 0, 5, 0},
-    {&gyro_z_offset, data_int16_show, "Gyro Z Offset", gyro_offset_step, 3, 0, 5, 0},
-};
-
-// 4.1.3 页面定义
-Page page_imu_params = {
-    .name = "Gyro Offsets",
-    .data = imu_data_params,
-    .len = 3,
-    .stage = Menu,
-    .back = NULL, // Menu_Init 中设置
-    .enter = {NULL},
-    .content = {NULL},
-    .order = 0,
-    .scroll_offset = 0,
-};
-
-// 4.2 陀螺仪校准功能页面
-// 4.2.1 校准函数包装
-void gyro_calibration_wrapper(void)
-{
-    // 显示提示信息
-    ips_clear();
-    show_string(0, 1, "Gyro Calibration");
-    show_string(0, 4, "Place device");
-    show_string(0, 6, "stable...");
-    show_string(0, 9, "Starting in 2s");
-
-    // 蜂鸣器响一声，提示开始校准
-    buzzer_beep(1, 50, 100);
-
-    // 检查IMU是否初始化
-    if (!imu_data.is_initialized)
-    {
-        ips_clear();
-        show_string(0, 4, "IMU Not Init!");
-        show_string(0, 7, "Press BACK");
-        return;
-    }
-
-    // 显示校准进行中
-    ips_clear();
-    show_string(0, 4, "Calibrating...");
-    show_string(0, 7, "Please wait");
-
-    // 执行校准（采样1000次，约1秒）
-    imu_calibrate_gyro(1000);
-
-    // 保存参数到Flash
-    Param_Save_All();
-
-    // 校准完成，蜂鸣器响一声
-    buzzer_beep(1, 200, 100);
-
-    // 显示完成信息
-    ips_clear();
-    show_string(0, 1, "Calibration Done!");
-    show_string(0, 4, "X Offset:");
-    show_int(8, 4, gyro_x_offset, 5);
-    show_string(0, 6, "Y Offset:");
-    show_int(8, 6, gyro_y_offset, 5);
-    show_string(0, 8, "Z Offset:");
-    show_int(8, 8, gyro_z_offset, 5);
-    show_string(0, 11, "Press BACK");
-
-    // 等待退出由菜单系统统一处理
-}
-
-// 4.2.2 页面定义
-Page page_gyro_calibration = {
-    .name = "Calibrate",
-    .data = NULL,
-    .len = 0,
-    .stage = Funtion,
-    .back = NULL, // Menu_Init 中设置
-    .enter = {NULL},
-    .content = {.function = gyro_calibration_wrapper},
-    .order = 0,
-    .scroll_offset = 0,
-};
-
-// 4.3 IMU主菜单页面（二级菜单，包含2个子菜单）
-Page page_imu = {
-    .name = "IMU",
-    .data = NULL, // 无参数，仅作为子菜单容器
-    .len = 2,     // 2个子菜单
-    .stage = Menu,
-    .back = NULL, // Menu_Init 中设置
-    .enter = {&page_imu_params, &page_gyro_calibration},
-    .content = {NULL},
-    .order = 0,
-    .scroll_offset = 0,
-};
-
-//============================================================
-// 5. Cargo运行模式
-//============================================================
-// 5.1 Cargo运行函数
-void cargo_run_mode(void)
-{
-    // 清除保护状态（确保电机可以启动）
-    motor_reset_protection();
-
-    // 启用PID控制
-    enable = true;
-
-    // 清屏并显示运行状态
-    ips_clear();
-    show_string(0, 6, "Running...");
-    show_string(0, 9, "Press BACK to exit");
-}
-
-// 5.2 Cargo页面定义
-Page page_cargo = {
-    .name = "Cargo",
-    .data = NULL,
-    .len = 0,
-    .stage = Funtion,
-    .back = NULL, // Menu_Init 中设置
-    .enter = {NULL},
-    .content = {.function = cargo_run_mode},
-    .order = 0,
-    .scroll_offset = 0,
-};
-
-//============================================================
-// 6. 调试监控页面 - Debug Monitor
-//============================================================
-// 6.1 调试监控函数
-void debug_monitor_mode(void)
-{
-    ips_clear();
-    // 循环显示实时数据（数据由定时器中断自动更新）
-    while (1)
-    {
-
-        show_string(0, 0, "Debug Monitor");
-
-        // 显示编码器数据
-        show_string(0, 3, "Enc0:");
-        show_int(6, 3, encoder[0], 5);
-
-        show_string(0, 5, "Enc1:");
-        show_int(6, 5, encoder[1], 5);
-
-        // 显示陀螺仪数据
-        show_string(0, 7, "GyroY:");
-        show_int(7, 7, imu_data.gyro_y, 6);
-
-        // 显示俯仰角
-        show_string(0, 9, "Pitch:");
-        show_float(7, 9, imu_data.pitch, 5, 2);
-
-        show_string(0, 12, "Press BACK");
-
-        // 检测退出
-        if (Key_Scan() == KEY_BACK)
-        {
-            break;
-        }
-    }
-}
-
-// 6.2 页面定义
-Page page_debug = {
-    .name = "Debug Monitor",
-    .data = NULL,
-    .len = 0,
-    .stage = Funtion,
-    .back = NULL, // Menu_Init 中设置
-    .enter = {NULL},
-    .content = {.function = debug_monitor_mode},
-    .order = 0,
-    .scroll_offset = 0,
-};
-
-//============================================================
-// 7. 主菜单 - Main Menu
-//============================================================
-// 说明：
-// - 上电自动从 Flash 加载参数
-// - 退出调参模式时自动保存到 Flash
-//============================================================
-Page main_page = {
-    .name = "Main Menu",
-    .data = NULL, // 主菜单无参数
-    .len = 5,     // 5 个子菜单
-    .stage = Menu,
-    .back = NULL, // 主菜单无父菜单
-    .enter = {&page_cargo, &page_servo, &page_pid, &page_imu, &page_debug},
-    .content = {NULL},
-    .order = 0,
-    .scroll_offset = 0,
-};
-
-//============================================================
-// 6. 添加新菜单的模板（取消注释后使用）
-//============================================================
-/*
-// 6.1 参数变量定义
-float   new_param1 = 0.0f;
-int16   new_param2 = 0;
-
-// 6.2 步进数组定义
-float   new_param1_step[] = {0.1f, 1.0f};
-int16   new_param2_step[] = {1, 10, 100};
-
-// 6.3 参数配置数组
-CustomData new_menu_data[] = {
-    {&new_param1,  data_float_show, "New Param 1", new_param1_step, 2, 0, 4, 4},
-    {&new_param2,  data_int16_show, "New Param 2", new_param2_step, 3, 0, 4, 4},
-};
-
-// 6.4 页面定义
-Page page_new_menu = {
-    .name   = "New Menu",
-    .data   = new_menu_data,
-    .len    = 2,
-    .stage  = Menu,
-    .back   = NULL,     // Menu_Init 中设置
-    .enter  = {NULL},
-    .content = {NULL},
-    .order  = 0,
-};
-
-// 6.5 别忘了在 Menu_Init() 中添加：
-// page_new_menu.back = &main_page;
-
-// 6.6 别忘了在 main_page.enter[] 中添加并更新 main_page.len：
-// .enter = {&page_example, &page_motor, &page_pid, &page_debug, &page_new_menu},
-// .len = 5;
-*/
-
-/**************** 参数保存/加载功能实现 ****************/
-#include "param_save.h"
-
 /**************** 菜单控制函数 ****************/
 
 /**
@@ -578,23 +112,8 @@ void Menu_Init(void)
     // 先初始化按键
     Key_Init();
 
-    // 设置页面之间的关系（父页面指针）
-    page_cargo.back = &main_page;
-    page_servo.back = &main_page;
-    page_pid.back = &main_page;
-    page_imu.back = &main_page;
-    page_debug.back = &main_page;
-
-    // 设置PID子页面的父页面指针（三级菜单）
-    page_gyro_pid.back = &page_pid;
-    page_angle_pid.back = &page_pid;
-    page_speed_pid.back = &page_pid;
-    page_drive_speed_pid.back = &page_pid;
-    page_output_smooth.back = &page_pid;
-
-    // 设置IMU子页面的父页面指针（三级菜单）
-    page_imu_params.back = &page_imu;
-    page_gyro_calibration.back = &page_imu;
+    // 调用用户菜单配置初始化（设置页面关系）
+    Menu_Config_Init();
 
     // 上电自动从Flash加载参数
     Param_Load_All();
@@ -885,6 +404,33 @@ void show_float(uint16 x, uint16 y, float value, uint8 num, uint8 pointnum)
 }
 
 /**
+ * @brief 显示彩色字符串
+ */
+void show_string_color(uint16 x, uint16 y, const char *str, uint16 color)
+{
+    ips114_set_color(color, RGB565_BLACK);
+    ips114_show_string(x * 8, y * 8, str);
+}
+
+/**
+ * @brief 显示彩色整数
+ */
+void show_int_color(uint16 x, uint16 y, int32 value, uint8 num, uint16 color)
+{
+    ips114_set_color(color, RGB565_BLACK);
+    ips114_show_int(x * 8, y * 8, value, num);
+}
+
+/**
+ * @brief 显示彩色浮点数
+ */
+void show_float_color(uint16 x, uint16 y, float value, uint8 num, uint8 pointnum, uint16 color)
+{
+    ips114_set_color(color, RGB565_BLACK);
+    ips114_show_float(x * 8, y * 8, value, num, pointnum);
+}
+
+/**
  * @brief 清屏
  */
 void ips_clear(void)
@@ -928,12 +474,13 @@ void Menu_Show(void)
         last_stage = Now_Menu->stage;
     }
 
-    // 在 Menu 模式下显示页面标题
+    // 在 Menu 模式下显示页面标题（红色）
     if (Now_Menu->stage == Menu)
     {
         if (Now_Menu->name != NULL)
         {
-            show_string(1, 0, Now_Menu->name);
+            show_string_color(1, 0, Now_Menu->name, RGB565_RED);
+            ips114_set_color(RGB565_WHITE, RGB565_BLACK); // 恢复默认白色
         }
     }
 
@@ -950,42 +497,50 @@ void Menu_Show(void)
             {
                 uint8 display_line = visible_count * 2 + 2; // 计算显示行号
 
-                // 绘制光标或清除光标位置
-                if (i == Now_Menu->order)
+                // 判断是否为选中行
+                uint8 is_selected = (i == Now_Menu->order);
+
+                // 绘制光标
+                if (is_selected)
                 {
-                    show_string(0, display_line, ">");
+                    show_string_color(0, display_line, ">", RGB565_GREEN);
                 }
                 else
                 {
                     show_string(0, display_line, " "); // 清除其他位置的光标
                 }
 
-                // 显示参数名称
-                show_string(1, display_line, Now_Menu->data[i].name);
+                // 显示参数名称（选中时为绿色高亮，未选中为白色）
+                show_string_color(1, display_line, Now_Menu->data[i].name,
+                                  is_selected ? RGB565_GREEN : RGB565_WHITE);
 
-                // 显示参数值
+                // 显示参数值（选中时为绿色高亮，未选中为白色）
+                uint16 value_color = is_selected ? RGB565_GREEN : RGB565_WHITE;
                 switch (Now_Menu->data[i].type)
                 {
                 case data_float_show:
-                    show_float(15, display_line, *(float *)Now_Menu->data[i].address,
-                               Now_Menu->data[i].digit_int, Now_Menu->data[i].digit_point);
+                    show_float_color(15, display_line, *(float *)Now_Menu->data[i].address,
+                               Now_Menu->data[i].digit_int, Now_Menu->data[i].digit_point, value_color);
                     break;
 
                 case data_int16_show:
-                    show_int(15, display_line, *(int16 *)Now_Menu->data[i].address,
-                             Now_Menu->data[i].digit_int);
+                    show_int_color(15, display_line, *(int16 *)Now_Menu->data[i].address,
+                             Now_Menu->data[i].digit_int, value_color);
                     break;
 
                 case data_int_show:
-                    show_int(15, display_line, *(int *)Now_Menu->data[i].address,
-                             Now_Menu->data[i].digit_int);
+                    show_int_color(15, display_line, *(int *)Now_Menu->data[i].address,
+                             Now_Menu->data[i].digit_int, value_color);
                     break;
 
                 case data_uint32_show:
-                    show_int(15, display_line, *(uint32 *)Now_Menu->data[i].address,
-                             Now_Menu->data[i].digit_int);
+                    show_int_color(15, display_line, *(uint32 *)Now_Menu->data[i].address,
+                             Now_Menu->data[i].digit_int, value_color);
                     break;
                 }
+
+                // 恢复默认白色
+                ips114_set_color(RGB565_WHITE, RGB565_BLACK);
 
                 visible_count++;
             }
@@ -1000,10 +555,13 @@ void Menu_Show(void)
             {
                 uint8 display_line = visible_count * 2 + 2; // 计算显示行号
 
-                // 绘制光标或清除光标位置
-                if (i == Now_Menu->order)
+                // 判断是否为选中行
+                uint8 is_selected = (i == Now_Menu->order);
+
+                // 绘制光标
+                if (is_selected)
                 {
-                    show_string(0, display_line, ">");
+                    show_string_color(0, display_line, ">", RGB565_GREEN);
                 }
                 else
                 {
@@ -1012,8 +570,13 @@ void Menu_Show(void)
 
                 if (Now_Menu->enter[i] != NULL)
                 {
-                    show_string(1, display_line, Now_Menu->enter[i]->name);
+                    // 选中时为绿色高亮，未选中为白色
+                    show_string_color(1, display_line, Now_Menu->enter[i]->name,
+                                      is_selected ? RGB565_GREEN : RGB565_WHITE);
                 }
+
+                // 恢复默认白色
+                ips114_set_color(RGB565_WHITE, RGB565_BLACK);
 
                 visible_count++;
             }
@@ -1036,32 +599,31 @@ void Menu_Show(void)
                 return; // 直接返回，下次循环重新绘制
             }
 
-            // 显示调参模式标题（Y=0，与菜单标题共用位置）
-            show_string(1, 0, "ADJUST MODE");
-            show_string(1, 0, "ADJUST MODE");
+            // 显示调参模式标题（Y=0，与菜单标题共用位置）（红色）
+            show_string_color(1, 0, "ADJUST MODE", RGB565_RED);
 
-            // 显示参数名称（Y=2）
-            show_string(1, 2, param->name);
+            // 显示参数名称（Y=2）（白色）
+            show_string_color(1, 2, param->name, RGB565_WHITE);
 
             // 显示当前参数值（Y=6）
             show_string(1, 6, "Value:");
             switch (param->type)
             {
             case data_float_show:
-                show_float(8, 6, *(float *)param->address,
-                           param->digit_int, param->digit_point);
+                show_float_color(8, 6, *(float *)param->address,
+                           param->digit_int, param->digit_point, RGB565_WHITE);
                 break;
 
             case data_int16_show:
-                show_int(8, 6, *(int16 *)param->address, param->digit_int);
+                show_int_color(8, 6, *(int16 *)param->address, param->digit_int, RGB565_WHITE);
                 break;
 
             case data_int_show:
-                show_int(8, 6, *(int *)param->address, param->digit_int);
+                show_int_color(8, 6, *(int *)param->address, param->digit_int, RGB565_WHITE);
                 break;
 
             case data_uint32_show:
-                show_int(8, 6, *(uint32 *)param->address, param->digit_int);
+                show_int_color(8, 6, *(uint32 *)param->address, param->digit_int, RGB565_WHITE);
                 break;
             }
 
@@ -1070,19 +632,19 @@ void Menu_Show(void)
             switch (param->type)
             {
             case data_float_show:
-                show_float(7, 8, ((float *)param->step)[param->step_num], 3, 3);
+                show_float_color(7, 8, ((float *)param->step)[param->step_num], 3, 3, RGB565_WHITE);
                 break;
 
             case data_int16_show:
-                show_int(7, 8, ((int16 *)param->step)[param->step_num], 5);
+                show_int_color(7, 8, ((int16 *)param->step)[param->step_num], 5, RGB565_WHITE);
                 break;
 
             case data_int_show:
-                show_int(7, 8, ((int *)param->step)[param->step_num], 5);
+                show_int_color(7, 8, ((int *)param->step)[param->step_num], 5, RGB565_WHITE);
                 break;
 
             case data_uint32_show:
-                show_int(7, 8, ((uint32 *)param->step)[param->step_num], 5);
+                show_int_color(7, 8, ((uint32 *)param->step)[param->step_num], 5, RGB565_WHITE);
                 break;
             }
 
@@ -1090,6 +652,9 @@ void Menu_Show(void)
             show_string(1, 10, "--------------------");
             show_string(1, 12, "UP/DN:Value");
             show_string(1, 14, "OK:Step  BACK:Exit");
+
+            // 恢复默认白色
+            ips114_set_color(RGB565_WHITE, RGB565_BLACK);
         }
     }
 }

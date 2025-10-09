@@ -102,12 +102,6 @@ struct Page
 /**************** 全局变量声明 ****************/
 extern Page *Now_Menu; // 当前菜单指针
 
-extern int16 add_mode[5];    // 通用步进数组（示例）
-extern float add_float[5];   // 浮点类型步进数组
-extern int16 add_int16[5];   // int16 步进数组
-extern uint32 add_uint32[5]; // uint32 步进数组
-extern int add_int[5];       // int 步进数组
-
 /**************** 函数声明 ****************/
 
 // 按键扫描相关函数
@@ -126,14 +120,18 @@ void Menu_Show(void);          // 菜单渲染显示
 void Key_operation(uint8 key); // 按键分发处理函数
 void menu_update(void);        // 菜单更新函数（主循环调用）
 
-// 显示封装函数
+// 显示封装函数（基础显示）
 void show_string(uint16 x, uint16 y, const char *str);
 void show_int(uint16 x, uint16 y, int32 value, uint8 num);
 void show_float(uint16 x, uint16 y, float value, uint8 num, uint8 pointnum);
-void show_uint(uint16 x, uint16 y, uint32 value, uint8 num);
+
+// 彩色显示函数
+void show_string_color(uint16 x, uint16 y, const char *str, uint16 color);
+void show_int_color(uint16 x, uint16 y, int32 value, uint8 num, uint16 color);
+void show_float_color(uint16 x, uint16 y, float value, uint8 num, uint8 pointnum, uint16 color);
 
 // 工具/辅助函数
-void Screen_Clear(void);                                 // 清屏
-void Screen_SetColor(uint16 pen_color, uint16 bg_color); // 设置前景/背景色
+void ips_clear(void);                                // 清屏
+void ips_clear_line(uint16 x, uint16 y, uint8 len);  // 清除单行
 
 #endif // _MENU_H_
