@@ -47,7 +47,8 @@ static void motor_control_with_protection(uint8 motor_id, int16 pwm_value, uint3
 static void trigger_protection(uint8 motor_id, protect_reason_t reason);
 static void check_angle_protection(void);
 static void check_stall_protection(uint8 motor_id);
-static void check_direction_change_protection(uint8 motor_id);
+// 方向切换保护功能已禁用
+// static void check_direction_change_protection(uint8 motor_id);
 
 // *************************** 函数实现 ***************************
 
@@ -228,7 +229,7 @@ void motor_protection_update(void)
         check_stall_protection(i);
 
         // 2.2 方向切换保护检测
-        //check_direction_change_protection(i);
+        // check_direction_change_protection(i);
     }
 }
 
@@ -308,11 +309,12 @@ static void check_stall_protection(uint8 motor_id)
 }
 
 //-------------------------------------------------------------------------------------------------------------------
-// 函数简介     方向切换保护检测（内部函数）
+// 函数简介     方向切换保护检测（内部函数）- 已禁用
 // 参数说明     motor_id: 电机ID (0=动量轮, 1=行进轮)
 // 返回参数     void
-// 备注信息     检测方向切换是否过快，过快则触发保护
+// 备注信息     检测方向切换是否过快，过快则触发保护（功能已禁用）
 //-------------------------------------------------------------------------------------------------------------------
+/* 方向切换保护功能已禁用
 static void check_direction_change_protection(uint8 motor_id)
 {
     if (motor_id >= 2)
@@ -352,6 +354,7 @@ static void check_direction_change_protection(uint8 motor_id)
         }
     }
 }
+*/
 
 //-------------------------------------------------------------------------------------------------------------------
 // 函数简介     重置电机保护状态

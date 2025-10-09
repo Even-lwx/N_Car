@@ -79,6 +79,7 @@ int core0_main(void)
         {
             // 正常菜单模式
             menu_update();
+            printf("%f,%d\r\n", imu_data.pitch, imu_data.gyro_y);
         }
 
         // 减少CPU占用
