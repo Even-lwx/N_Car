@@ -18,6 +18,7 @@
 #include "imu.h"
 #include "motor.h"
 #include "servo.h"
+#include "delayed_stop.h"
 
 /**************** 外部声明（来自menu.c的内核函数） ****************/
 extern void ips_clear(void);
@@ -31,6 +32,7 @@ extern void servo_set_angle(float angle);
 extern void motor_reset_protection(void);
 extern void momentum_wheel_control(int16 pwm_value); // 参数类型为 int16
 extern void drive_wheel_control(int16 pwm_value);    // 参数类型为 int16
+extern void delayed_stop_start_with_param(void);     // 延迟停车函数
 
 /**************** 外部变量引用 ****************/
 extern volatile bool enable; // volatile 关键字
@@ -322,7 +324,30 @@ Page page_imu = {
 };
 
 //============================================================
-// 5. Cargo运行模式
+// 5. 延迟停车参数菜单 - Delayed Stop Parameters
+//============================================================
+uint32 delay_step[] = {100, 1000, 5000, 10000}; // 0.1s, 1s, 5s, 10s
+uint32 enabled_step[] = {1};                    // 开关步进值
+
+CustomData delayed_stop_data[] = {
+    {&delayed_stop_enabled, data_uint32_show, "Enabled(0/1)", enabled_step, 1, 0, 1, 0},
+    {&delayed_stop_time_ms, data_uint32_show, "Delay Time(ms)", delay_step, 4, 0, 6, 0},
+};
+
+Page page_delayed_stop = {
+    .name = "Delayed Stop",
+    .data = delayed_stop_data,
+    .len = 2,
+    .stage = Menu,
+    .back = NULL, // 在 Menu_Config_Init() 中设置
+    .enter = {NULL},
+    .content = {NULL},
+    .order = 0,
+    .scroll_offset = 0,
+};
+
+//============================================================
+// 6. Cargo运行模式
 //============================================================
 void cargo_run_mode(void)
 {
@@ -332,6 +357,9 @@ void cargo_run_mode(void)
     ips_clear();
     show_string(0, 6, "Running...");
     show_string(0, 9, "Press BACK to exit");
+
+    // 启动延迟停车（如果启用了延迟停车功能）
+    delayed_stop_start_with_param();
 }
 
 Page page_cargo = {
@@ -347,7 +375,7 @@ Page page_cargo = {
 };
 
 //============================================================
-// 6. 调试监控页面
+// 7. 调试监控页面
 //============================================================
 void debug_monitor_mode(void)
 {
@@ -390,15 +418,15 @@ Page page_debug = {
 };
 
 //============================================================
-// 7. 主菜单
+// 8. 主菜单
 //============================================================
 Page main_page = {
     .name = "Main Menu",
     .data = NULL,
-    .len = 5, // 子菜单数量
+    .len = 6, // 子菜单数量
     .stage = Menu,
     .back = NULL,
-    .enter = {&page_cargo, &page_servo, &page_pid, &page_imu, &page_debug},
+    .enter = {&page_cargo, &page_delayed_stop, &page_servo, &page_pid, &page_imu, &page_debug},
     .content = {NULL},
     .order = 0,
     .scroll_offset = 0,
@@ -415,6 +443,7 @@ void Menu_Config_Init(void)
 {
     // 设置主菜单的子页面的父指针
     page_cargo.back = &main_page;
+    page_delayed_stop.back = &main_page;
     page_servo.back = &main_page;
     page_pid.back = &main_page;
     page_imu.back = &main_page;

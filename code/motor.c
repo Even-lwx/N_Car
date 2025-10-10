@@ -389,3 +389,4 @@ bool motor_is_stall_protected(uint8 motor_id)
         return false;
     return motor_protect[motor_id].is_protected;
 }
+

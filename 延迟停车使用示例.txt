@@ -1,0 +1,252 @@
+===============================================
+延迟停车功能使用说明
+===============================================
+
+一、功能简介
+---------------
+延迟停车功能允许系统在指定的时间后自动禁用PID控制并停止所有电机。
+
+**重要说明**：
+- 只有在enable=true（PID控制启用）时才会开始计时
+- 如果enable=false，计时器会暂停，不会递减
+- 这样可以确保车辆实际运行的时间与延迟时间一致
+- 停车时会触发蜂鸣器响1秒，提示停车完成
+
+**库文件位置**：
+- 头文件：code/delayed_stop.h
+- 实现文件：code/delayed_stop.c
+
+适用场景：
+- 自动行驶一段时间后停车
+- 定时运行测试
+- 安全超时保护
+
+二、API接口说明
+---------------
+
+1. delayed_stop_start(uint32 delay_ms)
+   启动延迟停车
+   参数：delay_ms - 延迟时间(毫秒)
+   说明：设置延迟时间后,系统会在指定时间后自动停车并响蜂鸣器1秒
+         如果delay_ms为0,则立即停车
+   示例：
+   delayed_stop_start(5000);  // 5秒后停车
+   delayed_stop_start(10000); // 10秒后停车
+
+2. delayed_stop_cancel()
+   取消延迟停车
+   说明：取消当前的延迟停车任务,不影响电机运行状态
+   示例：
+   delayed_stop_cancel();  // 取消延迟停车
+
+3. delayed_stop_update()
+   更新延迟停车状态
+   说明：此函数已在control()函数中自动调用(pid.c:170)
+         只有在enable=true时才会计时，enable=false时计时暂停
+
+4. delayed_stop_is_active()
+   查询延迟停车是否激活
+   返回：true=有延迟停车任务在运行, false=无
+   示例：
+   if (delayed_stop_is_active()) {
+       printf("延迟停车正在运行\r\n");
+   }
+
+5. delayed_stop_get_remaining_time()
+   获取剩余停车时间
+   返回：剩余时间(毫秒), 如果未激活返回0
+   示例：
+   uint32 remaining = delayed_stop_get_remaining_time();
+   printf("剩余时间: %d ms\r\n", remaining);
+
+三、使用示例
+---------------
+
+示例1: 基本使用
+--------------------
+#include "delayed_stop.h"
+#include "pid.h"
+
+void test_delayed_stop_basic(void)
+{
+    // 1. 启用PID控制
+    enable = true;
+
+    // 2. 设置5秒后停车
+    delayed_stop_start(5000);
+
+    // 3. 系统会继续运行,5秒后自动停车并响蜂鸣器
+}
+
+示例2: 带状态查询的使用
+--------------------
+void test_delayed_stop_with_status(void)
+{
+    // 启用PID控制
+    enable = true;
+
+    // 设置10秒后停车
+    delayed_stop_start(10000);
+
+    // 在主循环中查询剩余时间
+    while (delayed_stop_is_active())
+    {
+        uint32 remaining = delayed_stop_get_remaining_time();
+        printf("剩余停车时间: %d ms\r\n", remaining);
+        system_delay_ms(1000); // 每秒打印一次
+    }
+
+    printf("停车完成,蜂鸣器已响1秒\r\n");
+}
+
+示例3: 取消延迟停车
+--------------------
+void test_delayed_stop_cancel(void)
+{
+    // 启用PID控制
+    enable = true;
+
+    // 设置10秒后停车
+    delayed_stop_start(10000);
+
+    // 等待5秒
+    system_delay_ms(5000);
+
+    // 取消延迟停车
+    delayed_stop_cancel();
+    printf("延迟停车已取消\r\n");
+
+    // 车辆会继续运行,不会在10秒时停车
+}
+
+示例4: 在菜单系统中集成
+--------------------
+void menu_delayed_stop_handler(void)
+{
+    static uint32 delay_time_s = 5; // 默认5秒
+
+    // 显示菜单
+    ips114_show_string(0, 0, "Delayed Stop");
+    ips114_show_string(0, 16, "Time(s):");
+    ips114_show_uint(80, 16, delay_time_s, 3);
+
+    // 如果有延迟停车任务在运行,显示剩余时间
+    if (delayed_stop_is_active())
+    {
+        uint32 remaining_s = delayed_stop_get_remaining_time() / 1000;
+        ips114_show_string(0, 32, "Remaining:");
+        ips114_show_uint(100, 32, remaining_s, 3);
+    }
+
+    // 按键处理
+    if (key == KEY_UP)
+    {
+        delay_time_s++;
+    }
+    else if (key == KEY_DOWN && delay_time_s > 1)
+    {
+        delay_time_s--;
+    }
+    else if (key == KEY_OK)
+    {
+        // 启动延迟停车
+        delayed_stop_start(delay_time_s * 1000);
+        printf("延迟停车启动: %d 秒\r\n", delay_time_s);
+    }
+    else if (key == KEY_BACK)
+    {
+        // 取消延迟停车
+        delayed_stop_cancel();
+        printf("延迟停车已取消\r\n");
+    }
+}
+
+示例5: 立即停车
+--------------------
+void test_immediate_stop(void)
+{
+    // 传入0立即停车并响蜂鸣器
+    delayed_stop_start(0);
+    // 等价于:
+    // enable = false;
+    // momentum_wheel_control(0);
+    // drive_wheel_control(0);
+    // buzzer_beep(1, 1000, 0);
+}
+
+四、注意事项
+---------------
+1. 延迟停车会禁用PID控制系统(enable = false)并停止所有电机
+2. **只有在enable=true时才会计时**，如果enable=false，计时器暂停
+3. 停车时会触发蜂鸣器响1秒，提示停车完成
+4. 延迟停车与电机保护系统独立，不会互相干扰
+5. delayed_stop_update()已在control()函数中自动调用(pid.c:170)，无需手动调用
+6. 如果需要重新启动，需要重新设置enable标志为true
+7. 延迟时间精度为1ms（实际取决于control函数的调用周期）
+8. 同一时间只能有一个延迟停车任务运行，新任务会覆盖旧任务
+9. 延迟时间是**实际运行时间**，不包括enable=false的暂停时间
+10. 使用前需在代码中包含头文件：#include "delayed_stop.h"
+
+五、与其他功能的配合
+---------------
+
+1. 与电机保护系统配合
+   延迟停车与电机保护独立工作，互不干扰
+   如果电机保护触发，enable会被设置为false，延迟停车计时会暂停
+
+2. 与PID控制系统配合
+   延迟停车到期后，会禁用PID控制(enable = false)
+   如果需要重新启动，需手动设置enable = true
+
+3. 与蜂鸣器系统配合
+   停车时自动调用buzzer_beep(1, 1000, 0)响1秒
+   不会与电机保护的蜂鸣器冲突
+
+4. 与菜单系统配合
+   可以在菜单中添加延迟停车参数页，方便调试和测试
+
+六、故障排查
+---------------
+
+问题1: 延迟停车不工作
+解决: 检查delayed_stop_update()是否在control()函数中被调用(pid.c:170)
+     确认延迟时间是否正确设置(>0)
+     确认enable=true，因为只有启用时才会计时
+     检查是否包含了头文件 #include "delayed_stop.h"
+
+问题2: 延迟停车时间不准
+解决: 确认control()函数的调用周期（目前为1ms）
+     检查是否有其他中断影响定时器精度
+     注意：如果enable多次切换为false，实际运行时间会更长
+
+问题3: 停车后无法重启
+解决: 延迟停车会禁用enable标志，需要手动设置enable = true重启
+
+问题4: 延迟停车时间比预期长
+解决: 延迟停车只在enable=true时计时
+     检查是否有代码临时禁用了enable标志
+     如果有电机保护触发，会导致enable=false，延迟停车也会暂停
+
+问题5: 蜂鸣器没有响
+解决: 检查蜂鸣器是否正常工作
+     确认buzzer模块已正确初始化
+     检查buzzer_beep()函数是否被正确调用
+
+七、库文件结构
+---------------
+
+delayed_stop.h - 头文件
+- 包含所有API函数声明
+- 包含功能说明和使用注意事项
+
+delayed_stop.c - 实现文件
+- 延迟停车状态管理
+- 计时器更新逻辑
+- 停车触发处理（禁用PID、停止电机、响蜂鸣器）
+- 依赖：motor.h, pid.h, buzzer.h
+
+集成位置：
+- pid.c:2 - #include "delayed_stop.h"
+- pid.c:170 - delayed_stop_update()
+
+===============================================

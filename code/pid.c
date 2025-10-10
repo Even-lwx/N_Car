@@ -1,4 +1,5 @@
 #include "pid.h"
+#include "delayed_stop.h"
 #include "zf_common_headfile.h"
 
 // *************************** 宏定义 ***************************
@@ -164,6 +165,10 @@ void control(void)
         drive_wheel_control(0);
         return;
     }
+
+    // 延迟停车更新（只有enable为true时才计时）
+    delayed_stop_update();
+
     motor_protection_update();
 
     // 角度在±200范围内时清空积分项，重新开始积分

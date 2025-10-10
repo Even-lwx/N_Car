@@ -18,6 +18,7 @@ extern Page page_angle_pid;
 extern Page page_speed_pid;
 extern Page page_drive_speed_pid;
 extern Page page_imu_params;
+extern Page page_delayed_stop; // 延迟停车参数页面
 // 添加新页面时在这里声明
 
 /**************** 内部变量 ****************/
@@ -29,6 +30,7 @@ static Page *param_pages[] = {
     &page_speed_pid,
     &page_drive_speed_pid,
     &page_imu_params,
+    &page_delayed_stop, // 延迟停车参数
     // 添加新页面时在这里添加指针
     NULL // 结束标记
 };
