@@ -25,16 +25,16 @@ extern void show_string(uint16 x, uint16 y, const char *str);
 extern void show_int(uint16 x, uint16 y, int32 value, uint8 num);
 extern void show_float(uint16 x, uint16 y, float value, uint8 num, uint8 pointnum);
 extern uint8 Key_Scan(void);
-extern uint8 Param_Save_All(void);  // 返回值为 uint8
+extern uint8 Param_Save_All(void); // 返回值为 uint8
 extern void buzzer_beep(uint8 times, uint16 on_time, uint16 off_time);
 extern void servo_set_angle(float angle);
 extern void motor_reset_protection(void);
-extern void momentum_wheel_control(int16 pwm_value);  // 参数类型为 int16
-extern void drive_wheel_control(int16 pwm_value);     // 参数类型为 int16
+extern void momentum_wheel_control(int16 pwm_value); // 参数类型为 int16
+extern void drive_wheel_control(int16 pwm_value);    // 参数类型为 int16
 
 /**************** 外部变量引用 ****************/
-extern volatile bool enable;  // volatile 关键字
-extern int16 encoder[2];      // 类型为 int16 (不是 int32)
+extern volatile bool enable; // volatile 关键字
+extern int16 encoder[2];     // 类型为 int16 (不是 int32)
 
 //============================================================
 // 1. 示例菜单 - Example Menu（可选，供参考）
@@ -68,7 +68,7 @@ Page page_example = {
     .data = example_data,
     .len = 5,
     .stage = Menu,
-    .back = NULL,  // 在 Menu_Config_Init() 中设置
+    .back = NULL, // 在 Menu_Config_Init() 中设置
     .enter = {NULL},
     .content = {NULL},
     .order = 0,
@@ -89,7 +89,7 @@ Page page_servo = {
     .data = servo_data,
     .len = 1,
     .stage = Menu,
-    .back = NULL,  // 在 Menu_Config_Init() 中设置
+    .back = NULL, // 在 Menu_Config_Init() 中设置
     .enter = {NULL},
     .content = {NULL},
     .order = 0,
@@ -121,7 +121,7 @@ Page page_gyro_pid = {
     .data = gyro_pid_data,
     .len = 6,
     .stage = Menu,
-    .back = NULL,  // 在 Menu_Config_Init() 中设置
+    .back = NULL, // 在 Menu_Config_Init() 中设置
     .enter = {NULL},
     .content = {NULL},
     .order = 0,
@@ -129,11 +129,11 @@ Page page_gyro_pid = {
 };
 
 // 3.2 角度环PID
-uint32 machine_angle_step[] = {1, 10, 100};
+float machine_angle_step[] = {0.1f, 1.0f, 10.0f, 100.0f};
 float deadzone_step[] = {0.1f, 1.0f, 5.0f, 10.0f};
 
 CustomData angle_pid_data[] = {
-    {&machine_angle, data_uint32_show, "Mech Zero", machine_angle_step, 3, 0, 5, 0},
+    {&machine_angle, data_float_show, "Mech Zero", machine_angle_step, 4, 0, 2, 2},
     {&angle_pid.kp, data_float_show, "Kp", pid_kp_step, 5, 0, 4, 3},
     {&angle_pid.ki, data_float_show, "Ki", pid_ki_step, 5, 0, 4, 3},
     {&angle_pid.kd, data_float_show, "Kd", pid_kd_step, 5, 0, 4, 4},
@@ -148,7 +148,7 @@ Page page_angle_pid = {
     .data = angle_pid_data,
     .len = 8,
     .stage = Menu,
-    .back = NULL,  // 在 Menu_Config_Init() 中设置
+    .back = NULL, // 在 Menu_Config_Init() 中设置
     .enter = {NULL},
     .content = {NULL},
     .order = 0,
@@ -169,7 +169,7 @@ Page page_speed_pid = {
     .data = speed_pid_data,
     .len = 5,
     .stage = Menu,
-    .back = NULL,  // 在 Menu_Config_Init() 中设置
+    .back = NULL, // 在 Menu_Config_Init() 中设置
     .enter = {NULL},
     .content = {NULL},
     .order = 0,
@@ -193,7 +193,7 @@ Page page_drive_speed_pid = {
     .data = drive_speed_pid_data,
     .len = 6,
     .stage = Menu,
-    .back = NULL,  // 在 Menu_Config_Init() 中设置
+    .back = NULL, // 在 Menu_Config_Init() 中设置
     .enter = {NULL},
     .content = {NULL},
     .order = 0,
@@ -213,7 +213,7 @@ Page page_output_smooth = {
     .data = output_smooth_data,
     .len = 2,
     .stage = Menu,
-    .back = NULL,  // 在 Menu_Config_Init() 中设置
+    .back = NULL, // 在 Menu_Config_Init() 中设置
     .enter = {NULL},
     .content = {NULL},
     .order = 0,
@@ -226,7 +226,7 @@ Page page_pid = {
     .data = NULL,
     .len = 5,
     .stage = Menu,
-    .back = NULL,  // 在 Menu_Config_Init() 中设置
+    .back = NULL, // 在 Menu_Config_Init() 中设置
     .enter = {&page_gyro_pid, &page_angle_pid, &page_speed_pid, &page_drive_speed_pid, &page_output_smooth},
     .content = {NULL},
     .order = 0,
@@ -250,7 +250,7 @@ Page page_imu_params = {
     .data = imu_data_params,
     .len = 3,
     .stage = Menu,
-    .back = NULL,  // 在 Menu_Config_Init() 中设置
+    .back = NULL, // 在 Menu_Config_Init() 中设置
     .enter = {NULL},
     .content = {NULL},
     .order = 0,
@@ -301,7 +301,7 @@ Page page_gyro_calibration = {
     .data = NULL,
     .len = 0,
     .stage = Funtion,
-    .back = NULL,  // 在 Menu_Config_Init() 中设置
+    .back = NULL, // 在 Menu_Config_Init() 中设置
     .enter = {NULL},
     .content = {.function = gyro_calibration_wrapper},
     .order = 0,
@@ -314,7 +314,7 @@ Page page_imu = {
     .data = NULL,
     .len = 2,
     .stage = Menu,
-    .back = NULL,  // 在 Menu_Config_Init() 中设置
+    .back = NULL, // 在 Menu_Config_Init() 中设置
     .enter = {&page_imu_params, &page_gyro_calibration},
     .content = {NULL},
     .order = 0,
@@ -339,7 +339,7 @@ Page page_cargo = {
     .data = NULL,
     .len = 0,
     .stage = Funtion,
-    .back = NULL,  // 在 Menu_Config_Init() 中设置
+    .back = NULL, // 在 Menu_Config_Init() 中设置
     .enter = {NULL},
     .content = {.function = cargo_run_mode},
     .order = 0,
@@ -366,7 +366,7 @@ void debug_monitor_mode(void)
         show_int(7, 7, imu_data.gyro_y, 6);
 
         show_string(0, 9, "Pitch:");
-        show_float(7, 9, imu_data.pitch, 5, 2);
+        show_float(7, 9, imu_data.pitch, 3, 2);
 
         show_string(0, 12, "Press BACK");
 
@@ -382,7 +382,7 @@ Page page_debug = {
     .data = NULL,
     .len = 0,
     .stage = Funtion,
-    .back = NULL,  // 在 Menu_Config_Init() 中设置
+    .back = NULL, // 在 Menu_Config_Init() 中设置
     .enter = {NULL},
     .content = {.function = debug_monitor_mode},
     .order = 0,
@@ -395,7 +395,7 @@ Page page_debug = {
 Page main_page = {
     .name = "Main Menu",
     .data = NULL,
-    .len = 5,  // 子菜单数量
+    .len = 5, // 子菜单数量
     .stage = Menu,
     .back = NULL,
     .enter = {&page_cargo, &page_servo, &page_pid, &page_imu, &page_debug},

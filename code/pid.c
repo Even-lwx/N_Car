@@ -59,8 +59,8 @@ float output_filter_coeff = 0.6f;   // 输出滤波系数 (0-1)，降低以增�
 float filtered_motor_output = 0.0f; // 滤波后的电机输出
 
 // 控制优化参数（导出到菜单）
-float angle_deadzone = 5.0f;      // 角度死区
-float angle_protection = 1500.0f; // 角度保护阈值
+float angle_deadzone = 5.0f;    // 角度死区
+float angle_protection = 15.0f; // 角度保护阈值
 
 // 变增益PID参数
 float angle_gain_scale = 1.0f; // 角度环死区增益缩放（0-1），越小越平滑

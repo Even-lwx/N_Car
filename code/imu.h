@@ -97,10 +97,10 @@ extern imu_data_t imu_data;
 extern uint8 imu_algorithm_select;
 
 // ---------- IMU校准参数（可在菜单中调整） ----------
-extern uint8 gyro_ration;    // 陀螺仪权重系数（互补滤波用）
-extern uint8 acc_ration;     // 加速度计权重系数（互补滤波用）
-extern float call_cycle;     // 解算周期，单位：秒（互补滤波用）
-extern uint32 machine_angle; // 机械中值角度偏移（度）
+extern uint8 gyro_ration;   // 陀螺仪权重系数（互补滤波用）
+extern uint8 acc_ration;    // 加速度计权重系数（互补滤波用）
+extern float call_cycle;    // 解算周期，单位：秒（互补滤波用）
+extern float machine_angle; // 机械中值角度偏移（度）
 
 // ---------- 陀螺仪零偏校准数据（原始数据） ----------
 extern int16 gyro_x_offset; // X轴零偏
