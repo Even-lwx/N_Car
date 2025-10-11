@@ -53,9 +53,11 @@ extern bool dir;         // 计数方向
 extern int16 encoder[2]; // 编码器值
 
 // *************************** 函数声明 ***************************
-void motor_init(void);              // 电机初始化函数
-void motor_encoder_update(void);    // 编码器数据更新
-void motor_protection_update(void); // 电机保护更新（需要定时调用，建议1ms周期）
+void motor_init(void);                      // 电机初始化函数
+void motor_encoder_update(void);            // 编码器数据更新（同时更新两个编码器）
+void motor_encoder_update_momentum(void);   // 动量轮编码器数据更新（仅更新encoder[0]）
+void motor_encoder_update_drive(void);      // 行进轮编码器数据更新（仅更新encoder[1]）
+void motor_protection_update(void);         // 电机保护更新（需要定时调用，建议1ms周期）
 
 // 新增的独立电机控制函数
 void momentum_wheel_control(int16 pwm_value); // 动量轮电机控制函数 参数：带符号的PWM数值(-10000到0到0-10000)

@@ -48,13 +48,14 @@ void all_init(void)
     buzzer_init(); // 初始化蜂鸣器
 
     // 初始化各个模块
-    ips114_init();              // 初始化IPS114液晶屏
-    imu_init();                 // 初始化IMU陀螺仪
-    servo_init();               // 初始化舵机
-    motor_init();               // 初始化电                                                                                                                                                                                                                                                  机和编码器
-    pid_init();                 // 初始化简化PID控制系统
-    pit_ms_init(CCU60_CH0, 1);  // 1ms定时器用于PID控制
-    pit_ms_init(CCU60_CH1, 20); // 20ms定时器用于按键扫描（长按检测）
+    ips114_init();                 // 初始化IPS114液晶屏
+    imu_init();                    // 初始化IMU陀螺仪
+    servo_init();                  // 初始化舵机
+    motor_init();                  // 初始化电机和编码器
+    pid_init();                    // 初始化简化PID控制系统
+    turn_compensation_init();      // 初始化转弯补偿控制器
+    pit_ms_init(CCU60_CH0, 1);     // 1ms定时器用于PID控制
+    pit_ms_init(CCU60_CH1, 20);    // 20ms定时器用于按键扫描（长按检测）
     // buzzer_beep(1, 100, 100);
 }
 int core0_main(void)

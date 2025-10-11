@@ -19,6 +19,7 @@
 #include "motor.h"
 #include "servo.h"
 #include "delayed_stop.h"
+#include "turn_compensation.h"
 
 /**************** 外部声明（来自menu.c的内核函数） ****************/
 extern void ips_clear(void);
@@ -37,6 +38,10 @@ extern void delayed_stop_start_with_param(void);     // 延迟停车函数
 /**************** 外部变量引用 ****************/
 extern volatile bool enable; // volatile 关键字
 extern int16 encoder[2];     // 类型为 int16 (不是 int32)
+
+/**************** 页面前置声明 ****************/
+// 在页面相互引用前需要前置声明
+extern Page page_turn_comp; // 转弯补偿参数页面
 
 //============================================================
 // 1. 示例菜单 - Example Menu（可选，供参考）
@@ -226,17 +231,44 @@ Page page_output_smooth = {
 Page page_pid = {
     .name = "PID Params",
     .data = NULL,
-    .len = 5,
+    .len = 6,
     .stage = Menu,
     .back = NULL, // 在 Menu_Config_Init() 中设置
-    .enter = {&page_gyro_pid, &page_angle_pid, &page_speed_pid, &page_drive_speed_pid, &page_output_smooth},
+    .enter = {&page_gyro_pid, &page_angle_pid, &page_speed_pid, &page_drive_speed_pid, &page_output_smooth, &page_turn_comp},
     .content = {NULL},
     .order = 0,
     .scroll_offset = 0,
 };
 
 //============================================================
-// 4. IMU菜单
+// 4. 转弯补偿参数菜单 - Turn Compensation
+//============================================================
+float comp_k_angle_step[] = {0.0001f, 0.001f, 0.01f, 0.1f};
+float comp_k_speed_step[] = {0.0001f, 0.001f, 0.01f};
+float comp_max_step[] = {0.5f, 1.0f, 2.0f};
+float servo_center_step[] = {0.1f, 1.0f, 5.0f};
+
+CustomData turn_comp_data[] = {
+    {&turn_comp_k_angle, data_float_show, "K_Angle", comp_k_angle_step, 4, 0, 1, 4},
+    {&turn_comp_k_speed, data_float_show, "K_Speed", comp_k_speed_step, 3, 0, 1, 4},
+    {&turn_comp_max, data_float_show, "Max Comp", comp_max_step, 3, 0, 2, 1},
+    {&servo_center_angle, data_float_show, "Servo Center", servo_center_step, 3, 0, 3, 1},
+};
+
+Page page_turn_comp = {
+    .name = "Turn Compensation",
+    .data = turn_comp_data,
+    .len = 4,
+    .stage = Menu,
+    .back = NULL, // 在 Menu_Config_Init() 中设置
+    .enter = {NULL},
+    .content = {NULL},
+    .order = 0,
+    .scroll_offset = 0,
+};
+
+//============================================================
+// 5. IMU菜单
 //============================================================
 // 4.1 IMU参数
 int16 gyro_offset_step[] = {1, 10, 100};
@@ -455,6 +487,7 @@ void Menu_Config_Init(void)
     page_speed_pid.back = &page_pid;
     page_drive_speed_pid.back = &page_pid;
     page_output_smooth.back = &page_pid;
+    page_turn_comp.back = &page_pid;
 
     // 设置IMU子页面的父指针
     page_imu_params.back = &page_imu;

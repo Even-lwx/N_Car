@@ -1,5 +1,7 @@
 #include "pid.h"
 #include "delayed_stop.h"
+#include "turn_compensation.h"
+#include "servo.h"
 #include "zf_common_headfile.h"
 
 // *************************** 宏定义 ***************************
@@ -122,11 +124,19 @@ void gyro_loop_control(int angle_control)
  */
 void angle_loop_control(int speed_control)
 {
+    // 计算转弯补偿角度
+    float current_servo_angle = servo_get_angle();
+    float current_speed = (float)encoder[1];
+    float turn_compensation = turn_compensation_calculate(current_servo_angle, current_speed);
+
     // 使用IMU中已经滤波后的pitch角度（IMU中已对原始数据进行滤波再解算）
     float current_pitch = imu_data.pitch;
 
-    // 使用desired_angle作为目标角度（已由速度环更新），用IMU滤波后的pitch
-    angle_gyro_target = pid_calculate(&angle_pid, desired_angle, current_pitch);
+    // 目标角度 = 期望角度（速度环输出） + 转弯补偿
+    float target_angle_with_comp = desired_angle + turn_compensation;
+
+    // 角度环PID计算
+    angle_gyro_target = pid_calculate(&angle_pid, target_angle_with_comp, current_pitch);
 }
 
 /**
@@ -152,10 +162,15 @@ void control(void)
     {
         imu_update();
     }
-    // 速度环周期采集编码器数据
+    // 动量轮速度环周期采集编码器数据（20ms周期）
     if (count % 20 == 0)
     {
-        motor_encoder_update();
+        motor_encoder_update_momentum();
+    }
+    // 行进轮编码器采集（5ms周期，与转弯补偿同步）
+    if (count % 5 == 0)
+    {
+        motor_encoder_update_drive();
     }
     // printf("%f,%d\r\n", imu_data.pitch, imu_data.gyro_y);
     //  如果未启用控制，停止电机并返回
@@ -186,7 +201,7 @@ void control(void)
         speed_loop_control();
     }
 
-    // 角度环控制（5ms周期，每5个1ms周期执行一次）
+    // 角度环控制（5ms周期，每5个1ms周期执行一次，内部包含转弯补偿）
     if (count % 5 == 0)
     {
         angle_loop_control(0); // 速度环输出通过desired_angle传递

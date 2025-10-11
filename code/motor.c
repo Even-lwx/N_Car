@@ -151,6 +151,10 @@ static void motor_control_with_protection(uint8 motor_id, int16 pwm_value, uint3
     protect->last_pwm = pwm_value;
 }
 
+//-------------------------------------------------------------------------------------------------------------------
+// 函数简介     编码器数据更新（同时更新两个编码器）
+// 参数说明     void
+// 返回参数     void
 // 使用示例     motor_encoder_update();  // 在中断中调用
 // 备注信息     该函数在定时器中断中被调用，用于读取和清除编码器数据
 //-------------------------------------------------------------------------------------------------------------------
@@ -159,6 +163,32 @@ void motor_encoder_update(void)
     encoder[0] = encoder_get_count(ENCODER1_TIM); // 采集对应编码器数据
     encoder[1] = encoder_get_count(ENCODER2_TIM); // 采集对应编码器数据
     encoder_clear_count(ENCODER1_TIM);            // 清除对应计数
+    encoder_clear_count(ENCODER2_TIM);            // 清除对应计数
+}
+
+//-------------------------------------------------------------------------------------------------------------------
+// 函数简介     动量轮编码器数据更新（仅更新encoder[0]）
+// 参数说明     void
+// 返回参数     void
+// 使用示例     motor_encoder_update_momentum();  // 在中断中调用
+// 备注信息     仅采集动量轮编码器数据，用于独立的速度环控制
+//-------------------------------------------------------------------------------------------------------------------
+void motor_encoder_update_momentum(void)
+{
+    encoder[0] = encoder_get_count(ENCODER1_TIM); // 采集动量轮编码器数据
+    encoder_clear_count(ENCODER1_TIM);            // 清除对应计数
+}
+
+//-------------------------------------------------------------------------------------------------------------------
+// 函数简介     行进轮编码器数据更新（仅更新encoder[1]）
+// 参数说明     void
+// 返回参数     void
+// 使用示例     motor_encoder_update_drive();  // 在中断中调用
+// 备注信息     仅采集行进轮编码器数据，用于独立的速度环控制
+//-------------------------------------------------------------------------------------------------------------------
+void motor_encoder_update_drive(void)
+{
+    encoder[1] = encoder_get_count(ENCODER2_TIM); // 采集行进轮编码器数据
     encoder_clear_count(ENCODER2_TIM);            // 清除对应计数
 }
 
@@ -389,4 +419,3 @@ bool motor_is_stall_protected(uint8 motor_id)
         return false;
     return motor_protect[motor_id].is_protected;
 }
-
