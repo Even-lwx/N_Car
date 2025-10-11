@@ -56,6 +56,12 @@ RemoteSystemsTempFiles/
 .vscode/c_cpp_properties.json
 .vscode/*.log
 
+# Claude Code配置文件（本地配置不应提交）
+.claude/settings.local.json
+.claude/*.log
+.claude/cache/
+.claude/temp/
+
 # AURIX Development Studio临时文件
 *.tmp
 *.temp
