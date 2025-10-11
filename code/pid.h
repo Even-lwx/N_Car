@@ -48,6 +48,7 @@ extern float filtered_angle;        // 滤波后的角度
 extern float filtered_speed;        // 滤波后的速度
 extern float filtered_gyro;         // 滤波后的角速度
 extern float filtered_motor_output; // 滤波后的电机输出
+extern float drive_pwm_output;      // 行进轮PWM输出值
 
 // 控制标志
 extern volatile bool enable; // 使能标志（volatile防止编译器优化）

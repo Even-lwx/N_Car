@@ -60,6 +60,7 @@ static float angle_gyro_target = 0.0f; // 目标角速度（角度环输出）
 // 一阶低通滤波器相关变量（仅对PID输出滤波）
 float output_filter_coeff = 0.6f;   // 输出滤波系数 (0-1)，降低以增强平滑度
 float filtered_motor_output = 0.0f; // 滤波后的电机输出
+float drive_pwm_output = 0.0f;      // 行进轮PWM输出值
 
 // 控制优化参数（导出到菜单）
 float angle_deadzone = 5.0f;    // 角度死区
@@ -223,6 +224,7 @@ void control(void)
     {
         count = 0;
     }
+   
 }
 
 /**
@@ -372,7 +374,7 @@ void get_pid_status(float *gyro_error, float *angle_error, float *speed_error,
 void drive_speed_loop_control(void)
 {
     // 速度环PID计算
-    float drive_pwm_output = pid_calculate(&drive_speed_pid, target_drive_speed, (float)encoder[1]);
+    drive_pwm_output = pid_calculate(&drive_speed_pid, target_drive_speed, (float)encoder[1]);
 
     // 控制行进轮电机
     drive_wheel_control((int16)drive_pwm_output);

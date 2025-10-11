@@ -256,7 +256,7 @@ void motor_protection_update(void)
         }
 
         // 2.1 堵转保护检测
-        check_stall_protection(i);
+        // check_stall_protection(i);
 
         // 2.2 方向切换保护检测
         // check_direction_change_protection(i);

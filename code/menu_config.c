@@ -184,7 +184,7 @@ Page page_speed_pid = {
 };
 
 // 3.4 行进轮速度环PID
-float target_speed_step[] = {1.0f, 10.0f, 100.0f};
+float target_speed_step[] = {1.0f, 5.0f, 10.0f};
 
 CustomData drive_speed_pid_data[] = {
     {&target_drive_speed, data_float_show, "Target Speed", target_speed_step, 3, 0, 5, 1},
@@ -244,14 +244,14 @@ Page page_pid = {
 // 4. 转弯补偿参数菜单 - Turn Compensation
 //============================================================
 float comp_k_angle_step[] = {0.0001f, 0.001f, 0.01f, 0.1f};
-float comp_k_speed_step[] = {0.0001f, 0.001f, 0.01f};
+float comp_k_speed_step[] = {0.01f, 0.1f, 1.0f};
 float comp_max_step[] = {0.5f, 1.0f, 2.0f};
 float servo_center_step[] = {0.1f, 1.0f, 5.0f};
 
 CustomData turn_comp_data[] = {
-    {&turn_comp_k_angle, data_float_show, "K_Angle", comp_k_angle_step, 4, 0, 1, 4},
-    {&turn_comp_k_speed, data_float_show, "K_Speed", comp_k_speed_step, 3, 0, 1, 4},
-    {&turn_comp_max, data_float_show, "Max Comp", comp_max_step, 3, 0, 2, 1},
+    {&turn_comp_k_angle, data_float_show, "K_Angle", comp_k_angle_step, 4, 0, 2, 4},
+    {&turn_comp_k_speed, data_float_show, "K_Speed", comp_k_speed_step, 3, 0, 2, 4},
+    {&turn_comp_max, data_float_show, "Max Comp", comp_max_step, 3, 0, 3, 1},
     {&servo_center_angle, data_float_show, "Servo Center", servo_center_step, 3, 0, 3, 1},
 };
 

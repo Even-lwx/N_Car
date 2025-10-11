@@ -48,14 +48,14 @@ void all_init(void)
     buzzer_init(); // 初始化蜂鸣器
 
     // 初始化各个模块
-    ips114_init();                 // 初始化IPS114液晶屏
-    imu_init();                    // 初始化IMU陀螺仪
-    servo_init();                  // 初始化舵机
-    motor_init();                  // 初始化电机和编码器
-    pid_init();                    // 初始化简化PID控制系统
-    turn_compensation_init();      // 初始化转弯补偿控制器
-    pit_ms_init(CCU60_CH0, 1);     // 1ms定时器用于PID控制
-    pit_ms_init(CCU60_CH1, 20);    // 20ms定时器用于按键扫描（长按检测）
+    ips114_init();              // 初始化IPS114液晶屏
+    imu_init();                 // 初始化IMU陀螺仪
+    servo_init();               // 初始化舵机
+    motor_init();               // 初始化电机和编码器
+    pid_init();                 // 初始化简化PID控制系统
+    turn_compensation_init();   // 初始化转弯补偿控制器
+    pit_ms_init(CCU60_CH0, 1);  // 1ms定时器用于PID控制
+    pit_ms_init(CCU60_CH1, 20); // 20ms定时器用于按键扫描（长按检测）
     // buzzer_beep(1, 100, 100);
 }
 int core0_main(void)
@@ -72,15 +72,15 @@ int core0_main(void)
             // 在这里添加你需要在 Cargo 模式执行的代码
 
             // 例如：实时显示调试信息
-            printf("%f,%d,%f\r\n", imu_data.pitch, imu_data.gyro_y, filtered_motor_output);
-
+            // printf("%f,%d,%f\r\n", imu_data.pitch, imu_data.gyro_y, filtered_motor_output);
+            printf("%f,%d\r\n", drive_pwm_output, encoder[1]);
             // 检测退出（BACK键由20ms中断处理，这里只需要检查enable状态）
         }
         else
         {
             // 正常菜单模式
             menu_update();
-            printf("%f,%d\r\n", imu_data.pitch, imu_data.gyro_y);
+            //printf("%f,%d\r\n", imu_data.pitch, imu_data.gyro_y);
         }
 
         // 减少CPU占用

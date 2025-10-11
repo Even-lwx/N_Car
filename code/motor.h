@@ -11,7 +11,7 @@
 // 电机保护参数
 #define STALL_DETECT_PWM_THRESHOLD (3000)  // 堵转检测PWM阈值（超过此值才检测堵转）
 #define STALL_DETECT_ENCODER_THRESHOLD (2) // 堵转检测编码器阈值（低于此值认为堵转）
-#define STALL_DETECT_TIME_MS (500)         // 堵转检测时间（毫秒）
+#define STALL_DETECT_TIME_MS (1000)        // 堵转检测时间（毫秒）
 #define DIR_CHANGE_MIN_INTERVAL_MS (100)   // 方向切换最小间隔（毫秒）
 #define PROTECTION_DISABLE_TIME_MS (2000)  // 保护触发后禁用电机时间（毫秒）
 
@@ -53,11 +53,11 @@ extern bool dir;         // 计数方向
 extern int16 encoder[2]; // 编码器值
 
 // *************************** 函数声明 ***************************
-void motor_init(void);                      // 电机初始化函数
-void motor_encoder_update(void);            // 编码器数据更新（同时更新两个编码器）
-void motor_encoder_update_momentum(void);   // 动量轮编码器数据更新（仅更新encoder[0]）
-void motor_encoder_update_drive(void);      // 行进轮编码器数据更新（仅更新encoder[1]）
-void motor_protection_update(void);         // 电机保护更新（需要定时调用，建议1ms周期）
+void motor_init(void);                    // 电机初始化函数
+void motor_encoder_update(void);          // 编码器数据更新（同时更新两个编码器）
+void motor_encoder_update_momentum(void); // 动量轮编码器数据更新（仅更新encoder[0]）
+void motor_encoder_update_drive(void);    // 行进轮编码器数据更新（仅更新encoder[1]）
+void motor_protection_update(void);       // 电机保护更新（需要定时调用，建议1ms周期）
 
 // 新增的独立电机控制函数
 void momentum_wheel_control(int16 pwm_value); // 动量轮电机控制函数 参数：带符号的PWM数值(-10000到0到0-10000)

@@ -43,26 +43,28 @@ void turn_compensation_init(void)
 //              speed: 当前速度（编码器反馈值）
 // 返回参数     float: 补偿角度（度）
 // 使用示例     float compensation = turn_compensation_calculate(servo_angle, encoder[1]);
-// 备注信息     物理意义：当车辆转向时，飞轮需要补偿一个额外的平衡角度偏置
-//              这个偏置与转向角度和车速成正比
-//              补偿公式：dynamic_zero = (servo_deviation) * K_angle * K_speed * |speed|
-//              当速度为0时，补偿为0（静止转向不产生离心力）
-//              正值表示车需要向左倾斜补偿，负值表示向右倾斜补偿
+// 备注信息     物理意义：车辆转向时需要补偿两部分：
+//              1. 基础补偿：舵机偏转导致的静态重心偏移（与速度无关，速度为0时也存在）
+//              2. 动态补偿：转向产生的离心力（与速度平方成正比）
+//              补偿公式：dynamic_zero = K_angle * servo_deviation + K_speed * speed^2 * servo_deviation
+//              正值表示需要向左倾斜补偿，负值表示向右倾斜补偿
 //-------------------------------------------------------------------------------------------------------------------
 float turn_compensation_calculate(float servo_angle, float speed)
 {
     // 1. 计算舵机偏离中点的角度
     float servo_deviation = servo_angle - servo_center_angle;
 
-    // 2. 基础补偿：基于舵机角度
+    // 2. 基础补偿：基于舵机角度（即使速度为0也需要补偿重心偏移）
     float base_compensation = turn_comp_k_angle * servo_deviation;
 
-    // 3. 速度增益：速度越快，离心力越大，补偿越大
-    //    当速度为0时，补偿为0（静止转向不产生离心力）
-    float speed_gain = turn_comp_k_speed * fabs(speed);
+    // 3. 动态补偿：速度越快，离心力越大，需要额外补偿
+    //    速度平方项：模拟离心力与速度平方成正比的关系
+    float dynamic_compensation = turn_comp_k_speed * fabs(speed) * fabs(speed) * servo_deviation;
 
-    // 4. 计算动态零点补偿 = 基础补偿 × 速度增益
-    float dynamic_zero = base_compensation * speed_gain;
+    // 4. 总补偿 = 基础补偿 + 动态补偿
+    //    - 基础补偿：补偿静态重心偏移（速度为0时仍存在）
+    //    - 动态补偿：补偿离心力影响（速度越快影响越大）
+    float dynamic_zero = base_compensation + dynamic_compensation;
 
     // 5. 限幅处理：防止过度补偿
     if (dynamic_zero > turn_comp_max)
