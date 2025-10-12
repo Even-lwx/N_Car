@@ -35,6 +35,10 @@ extern void momentum_wheel_control(int16 pwm_value); // 参数类型为 int16
 extern void drive_wheel_control(int16 pwm_value);    // 参数类型为 int16
 extern void delayed_stop_start_with_param(void);     // 延迟停车函数
 
+// 摄像头相关函数（来自Seekfree库）
+extern uint8 mt9v03x_image[MT9V03X_H][MT9V03X_W];    // 摄像头图像数据
+extern void ips114_show_gray_image(uint16 x, uint16 y, const uint8 *image, uint16 width, uint16 height, uint16 dis_width, uint16 dis_height, uint8 threshold);
+
 /**************** 外部变量引用 ****************/
 extern volatile bool enable; // volatile 关键字
 extern int16 encoder[2];     // 类型为 int16 (不是 int32)
@@ -472,15 +476,57 @@ Page page_debug = {
 };
 
 //============================================================
-// 8. 主菜单
+// 8. 摄像头图像显示
+//============================================================
+void camera_display_mode(void)
+{
+    ips_clear();
+    show_string(0, 0, "Camera View");
+    show_string(0, 15, "Press BACK");
+
+    while (1)
+    {
+        // 显示摄像头图像
+        // 参数说明：
+        // (0, 8) - 显示起始坐标 (从第8行开始显示，留出标题空间)
+        // mt9v03x_image[0] - 图像数据指针
+        // MT9V03X_W, MT9V03X_H - 原始图像尺寸 (188x120)
+        // MT9V03X_W, MT9V03X_H - 显示图像尺寸 (188x120，不缩放)
+        // 0 - 阈值（0表示显示灰度图，非0表示二值化）
+        ips114_show_gray_image(0, 8, mt9v03x_image[0], MT9V03X_W, MT9V03X_H, MT9V03X_W, MT9V03X_H, 0);
+
+        // 检测返回键
+        if (Key_Scan() == KEY_BACK)
+        {
+            break;
+        }
+
+        system_delay_ms(50); // 约20fps刷新率
+    }
+}
+
+Page page_camera = {
+    .name = "Camera View",
+    .data = NULL,
+    .len = 0,
+    .stage = Funtion,
+    .back = NULL, // 在 Menu_Config_Init() 中设置
+    .enter = {NULL},
+    .content = {.function = camera_display_mode},
+    .order = 0,
+    .scroll_offset = 0,
+};
+
+//============================================================
+// 9. 主菜单
 //============================================================
 Page main_page = {
     .name = "Main Menu",
     .data = NULL,
-    .len = 6, // 子菜单数量
+    .len = 7, // 子菜单数量（增加了Camera View）
     .stage = Menu,
     .back = NULL,
-    .enter = {&page_cargo, &page_delayed_stop, &page_servo, &page_pid, &page_imu, &page_debug},
+    .enter = {&page_cargo, &page_delayed_stop, &page_servo, &page_pid, &page_imu, &page_debug, &page_camera},
     .content = {NULL},
     .order = 0,
     .scroll_offset = 0,
@@ -502,6 +548,7 @@ void Menu_Config_Init(void)
     page_pid.back = &main_page;
     page_imu.back = &main_page;
     page_debug.back = &main_page;
+    page_camera.back = &main_page; // 摄像头显示页面
 
     // 设置PID子页面的父指针
     page_gyro_pid.back = &page_pid;
