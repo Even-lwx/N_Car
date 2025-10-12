@@ -49,6 +49,7 @@ void all_init(void)
 
     // 初始化各个模块
     ips114_init();              // 初始化IPS114液晶屏
+    mt9v03x_init();             // 初始化MT9V03X摄像头
     imu_init();                 // 初始化IMU陀螺仪
     servo_init();               // 初始化舵机
     motor_init();               // 初始化电机和编码器
