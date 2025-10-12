@@ -57,4 +57,7 @@ void Draw_Line(int startX, int startY, int endX, int endY);
 float err_sum_average(uint8 start_point, uint8 end_point);
 uint8 image_out_of_bounds(uint8 binaryImage[IMAGE_HEIGHT][IMAGE_WIDTH]);
 
+// 总图像处理函数
+void image_process(void);  // 集成边界提取和元素识别的主函数
+
 #endif

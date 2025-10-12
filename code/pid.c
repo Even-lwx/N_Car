@@ -2,6 +2,7 @@
 #include "delayed_stop.h"
 #include "turn_compensation.h"
 #include "servo.h"
+#include "image.h"
 #include "zf_common_headfile.h"
 
 // *************************** 宏定义 ***************************
@@ -200,6 +201,9 @@ void control(void)
     if (count % 20 == 0)
     {
         speed_loop_control();
+
+        // 图像处理（20ms周期，与摄像头帧率50fps同步）
+        image_process();
     }
 
     // 角度环控制（5ms周期，每5个1ms周期执行一次，内部包含转弯补偿）
