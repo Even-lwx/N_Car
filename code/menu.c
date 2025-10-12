@@ -177,6 +177,18 @@ void Menu_Back(void)
             ips_clear();
             need_refresh = 1;
         }
+        else
+        {
+            // 如果已经在主菜单（back为NULL），按返回键让光标指向Cargo项
+            // 这是一个快捷选择功能，还需要按OK键才能真正进入
+            if (Now_Menu == &main_page)
+            {
+                // 将光标移动到第0项（Cargo）
+                Now_Menu->order = 0;
+                Now_Menu->scroll_offset = 0;
+                // 不需要刷新整个屏幕，光标位置自动更新
+            }
+        }
     }
     else if (Now_Menu->stage == Change)
     {
