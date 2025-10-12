@@ -10,8 +10,13 @@ int8 duty = 0;          // 当前占空比
 bool dir = true;        // 计数方向
 int16 encoder[2] = {0}; // 编码器值
 
+// 电机保护开关（默认启用角度保护，禁用堵转保护）
+uint32 stall_protect_enable = 0;  // 堵转保护使能开关 (0=禁用, 1=启用)
+uint32 angle_protect_enable = 1;  // 角度保护使能开关 (0=禁用, 1=启用)
+
 // *************************** 外部变量引用 ***************************
 extern volatile bool enable; // PID使能标志(定义在pid.c中)
+extern float angle_protection; // 角度保护阈值(定义在pid.c中)
 
 // *************************** 电机保护相关变量 ***************************
 // 保护触发原因枚举
@@ -255,10 +260,10 @@ void motor_protection_update(void)
             continue;
         }
 
-        // 2.1 堵转保护检测
-        // check_stall_protection(i);
+        // 2.1 堵转保护检测（可通过stall_protect_enable开关控制）
+        check_stall_protection(i);
 
-        // 2.2 方向切换保护检测
+        // 2.2 方向切换保护检测（已禁用）
         // check_direction_change_protection(i);
     }
 }
@@ -268,9 +273,16 @@ void motor_protection_update(void)
 // 参数说明     void
 // 返回参数     void
 // 备注信息     检测pitch角度是否超限，超限时触发保护并清空PID积分项
+//              可通过angle_protect_enable开关控制是否启用此保护
 //-------------------------------------------------------------------------------------------------------------------
 static void check_angle_protection(void)
 {
+    // 如果角度保护开关被禁用，直接返回
+    if (!angle_protect_enable)
+    {
+        return;
+    }
+
     static bool angle_protect_triggered = false;
 
     // 检查角度是否超出保护阈值
@@ -306,9 +318,16 @@ static void check_angle_protection(void)
 // 参数说明     motor_id: 电机ID (0=动量轮, 1=行进轮)
 // 返回参数     void
 // 备注信息     检测PWM高但编码器反馈低的情况，连续检测超过阈值时间则触发保护
+//              可通过stall_protect_enable开关控制是否启用此保护
 //-------------------------------------------------------------------------------------------------------------------
 static void check_stall_protection(uint8 motor_id)
 {
+    // 如果堵转保护开关被禁用，直接返回
+    if (!stall_protect_enable)
+    {
+        return;
+    }
+
     if (motor_id >= 2)
         return;
 

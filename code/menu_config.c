@@ -41,7 +41,8 @@ extern int16 encoder[2];     // 类型为 int16 (不是 int32)
 
 /**************** 页面前置声明 ****************/
 // 在页面相互引用前需要前置声明
-extern Page page_turn_comp; // 转弯补偿参数页面
+extern Page page_turn_comp;     // 转弯补偿参数页面
+extern Page page_motor_protect; // 电机保护参数页面
 
 //============================================================
 // 1. 示例菜单 - Example Menu（可选，供参考）
@@ -212,13 +213,12 @@ float filter_coeff_step[] = {0.01f, 0.05f, 0.1f};
 
 CustomData output_smooth_data[] = {
     {&output_filter_coeff, data_float_show, "Filter Coeff", filter_coeff_step, 3, 0, 1, 2},
-    {&angle_protection, data_float_show, "Angle Protection", pid_limit_step, 3, 0, 5, 1},
 };
 
 Page page_output_smooth = {
     .name = "Output Smooth",
     .data = output_smooth_data,
-    .len = 2,
+    .len = 1,
     .stage = Menu,
     .back = NULL, // 在 Menu_Config_Init() 中设置
     .enter = {NULL},
@@ -227,14 +227,36 @@ Page page_output_smooth = {
     .scroll_offset = 0,
 };
 
-// 3.6 PID主菜单
+// 3.6 电机保护参数
+uint32 protect_enable_step[] = {1};              // 开关步进值 (0/1切换)
+float angle_protect_step[] = {0.5f, 1.0f, 5.0f}; // 角度保护阈值步进
+
+CustomData motor_protect_data[] = {
+    {&stall_protect_enable, data_uint32_show, "Stall Protect", protect_enable_step, 1, 0, 1, 0},
+    {&angle_protect_enable, data_uint32_show, "Angle Protect", protect_enable_step, 1, 0, 1, 0},
+    {&angle_protection, data_float_show, "Angle Threshold", angle_protect_step, 3, 0, 4, 1},
+};
+
+Page page_motor_protect = {
+    .name = "Motor Protection",
+    .data = motor_protect_data,
+    .len = 3,
+    .stage = Menu,
+    .back = NULL, // 在 Menu_Config_Init() 中设置
+    .enter = {NULL},
+    .content = {NULL},
+    .order = 0,
+    .scroll_offset = 0,
+};
+
+// 3.7 PID主菜单
 Page page_pid = {
     .name = "PID Params",
     .data = NULL,
-    .len = 6,
+    .len = 7,
     .stage = Menu,
     .back = NULL, // 在 Menu_Config_Init() 中设置
-    .enter = {&page_gyro_pid, &page_angle_pid, &page_speed_pid, &page_drive_speed_pid, &page_output_smooth, &page_turn_comp},
+    .enter = {&page_gyro_pid, &page_angle_pid, &page_speed_pid, &page_drive_speed_pid, &page_output_smooth, &page_motor_protect, &page_turn_comp},
     .content = {NULL},
     .order = 0,
     .scroll_offset = 0,
@@ -249,7 +271,7 @@ float comp_max_step[] = {0.5f, 1.0f, 2.0f};
 float servo_center_step[] = {0.1f, 1.0f, 5.0f};
 
 CustomData turn_comp_data[] = {
-    {&turn_comp_k_angle, data_float_show, "K_Angle", comp_k_angle_step, 4, 0, 2, 4},
+    {&turn_comp_k_servo, data_float_show, "K_Servo", comp_k_angle_step, 4, 0, 2, 4},
     {&turn_comp_k_speed, data_float_show, "K_Speed", comp_k_speed_step, 3, 0, 2, 4},
     {&turn_comp_max, data_float_show, "Max Comp", comp_max_step, 3, 0, 3, 1},
     {&servo_center_angle, data_float_show, "Servo Center", servo_center_step, 3, 0, 3, 1},
@@ -487,6 +509,7 @@ void Menu_Config_Init(void)
     page_speed_pid.back = &page_pid;
     page_drive_speed_pid.back = &page_pid;
     page_output_smooth.back = &page_pid;
+    page_motor_protect.back = &page_pid;
     page_turn_comp.back = &page_pid;
 
     // 设置IMU子页面的父指针

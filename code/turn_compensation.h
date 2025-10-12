@@ -19,36 +19,42 @@
 // 2. 舵机角度改变车体重心分布
 // 3. 实际平衡角度不再是静止时的机械零点
 //
-// 解决方案：动态零点补偿算法
-// 当车辆转向时，飞轮需要补偿一个额外的平衡角度偏置
-// 这个偏置与转向角度和车速成正比
+// 解决方案：分离式补偿算法
+// 将补偿分为两个独立部分，避免误差耦合放大：
+// 1. 舵机补偿：补偿舵机偏转导致的重心偏移（与速度无关）
+// 2. 速度补偿：补偿高速运动时的离心力（与舵机角度大小无关，仅取方向）
 //
 // 补偿公式：
-// dynamic_zero = (servo_angle - servo_center) × K_angle × K_speed × |speed|
+// total_compensation = servo_compensation + speed_compensation
+//
+// 其中：
+// servo_compensation = K_servo × servo_deviation
+// speed_compensation = K_speed × speed² × sign(servo_deviation)
 //
 // 计算步骤：
 // 1. 计算舵机偏差：servo_deviation = servo_angle - servo_center
-// 2. 计算基础补偿：base_compensation = K_angle × servo_deviation
-// 3. 计算速度增益：speed_gain = K_speed × |speed|
-// 4. 计算动态零点：dynamic_zero = base_compensation × speed_gain
-// 5. 限幅处理：限制在 [-turn_comp_max, +turn_comp_max] 范围
+// 2. 计算舵机补偿：servo_compensation = K_servo × servo_deviation
+// 3. 计算速度补偿方向：turn_direction = sign(servo_deviation)
+// 4. 计算速度补偿：speed_compensation = K_speed × speed² × turn_direction
+// 5. 总补偿：total_compensation = servo_compensation + speed_compensation
+// 6. 限幅处理：限制在 [-turn_comp_max, +turn_comp_max] 范围
 //
 // 物理意义：
-// - 当速度为0时，补偿为0（静止转向不产生离心力）
-// - 速度越快，离心力越大，补偿越大
-// - 转向角度越大，需要的补偿越大
+// - 舵机补偿：补偿舵机偏转造成的静态重心偏移（即使静止也存在）
+// - 速度补偿：补偿转弯时的离心力（只与速度和转向方向有关）
+// - 分离设计避免了舵机偏差误差在高速时被放大
 //
 // 参数说明：
-// - K_angle: 舵机角度增益系数（建议范围: 0.01 ~ 1.0）
-// - K_speed: 速度增益系数（建议范围: 0.001 ~ 0.1）
+// - K_servo: 舵机补偿系数（建议范围: 0.01 ~ 1.0）
+// - K_speed: 速度补偿系数（建议范围: 0.001 ~ 0.1）
 // - servo_angle: 当前舵机角度（度）
 // - servo_center: 舵机中点角度（默认90度）
 // - speed: 当前速度（编码器绝对值）
 // - turn_comp_max: 最大补偿限制（默认±8度）
 
 // *************************** 全局变量声明 ***************************
-extern float turn_comp_k_angle;      // 舵机角度增益系数（建议范围: 0.01 ~ 1.0）
-extern float turn_comp_k_speed;      // 速度增益系数（建议范围: 0.001 ~ 0.1）
+extern float turn_comp_k_servo;      // 舵机补偿系数（补偿重心偏移，建议范围: 0.01 ~ 1.0）
+extern float turn_comp_k_speed;      // 速度补偿系数（补偿离心力，建议范围: 0.001 ~ 0.1）
 extern float turn_comp_max;          // 最大补偿角度限制（防止补偿过大，默认±8度）
 extern float servo_center_angle;     // 舵机中点角度（默认90度，可调整）
 
@@ -64,12 +70,15 @@ extern float servo_center_angle;     // 舵机中点角度（默认90度，可�
 void turn_compensation_init(void);
 
 //-------------------------------------------------------------------------------------------------------------------
-// 函数简介     计算转弯补偿角度
+// 函数简介     计算转弯补偿角度（分离式补偿算法）
 // 参数说明     servo_angle: 当前舵机角度
 //              speed: 当前速度（编码器反馈值）
 // 返回参数     float: 补偿角度（度）
 // 使用示例     float compensation = turn_compensation_calculate(servo_angle, encoder[0]);
 // 备注信息     返回值为补偿角度，需要叠加到目标角度或机械零点上
+//              补偿 = 舵机补偿 + 速度补偿
+//              - 舵机补偿：与舵机偏差成正比，补偿静态重心偏移
+//              - 速度补偿：与速度平方和转向方向有关，补偿离心力
 //              正值表示车需要向左倾斜补偿，负值表示向右倾斜补偿
 //-------------------------------------------------------------------------------------------------------------------
 float turn_compensation_calculate(float servo_angle, float speed);

@@ -18,8 +18,10 @@ extern Page page_angle_pid;
 extern Page page_speed_pid;
 extern Page page_drive_speed_pid;
 extern Page page_imu_params;
-extern Page page_delayed_stop; // 延迟停车参数页面
-extern Page page_turn_comp;    // 转弯补偿参数页面
+extern Page page_delayed_stop;    // 延迟停车参数页面
+extern Page page_output_smooth;   // 输出平滑参数页面
+extern Page page_motor_protect;   // 电机保护参数页面
+extern Page page_turn_comp;       // 转弯补偿参数页面
 // 添加新页面时在这里声明
 
 /**************** 内部变量 ****************/
@@ -31,8 +33,10 @@ static Page *param_pages[] = {
     &page_speed_pid,
     &page_drive_speed_pid,
     &page_imu_params,
-    &page_delayed_stop, // 延迟停车参数
-    &page_turn_comp,    // 转弯补偿参数
+    &page_delayed_stop,    // 延迟停车参数
+    &page_output_smooth,   // 输出平滑参数
+    &page_motor_protect,   // 电机保护参数
+    &page_turn_comp,       // 转弯补偿参数
     // 添加新页面时在这里添加指针
     NULL // 结束标记
 };

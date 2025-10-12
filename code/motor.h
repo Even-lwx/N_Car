@@ -52,6 +52,10 @@ extern int8 duty;        // 当前占空比
 extern bool dir;         // 计数方向
 extern int16 encoder[2]; // 编码器值
 
+// 电机保护开关（可在菜单中调整）
+extern uint32 stall_protect_enable;  // 堵转保护使能开关 (0=禁用, 1=启用)
+extern uint32 angle_protect_enable;  // 角度保护使能开关 (0=禁用, 1=启用)
+
 // *************************** 函数声明 ***************************
 void motor_init(void);                    // 电机初始化函数
 void motor_encoder_update(void);          // 编码器数据更新（同时更新两个编码器）

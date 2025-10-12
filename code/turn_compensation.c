@@ -13,8 +13,8 @@
 #include <math.h>
 
 // *************************** 全局变量定义 ***************************
-float turn_comp_k_angle = 0.1f;   // 舵机角度增益系数（默认0.1，建议范围: 0.01 ~ 1.0）
-float turn_comp_k_speed = 0.01f;  // 速度增益系数（默认0.01，建议范围: 0.001 ~ 0.1）
+float turn_comp_k_servo = 0.1f;   // 舵机补偿系数（补偿重心偏移，默认0.1，建议范围: 0.01 ~ 1.0）
+float turn_comp_k_speed = 0.01f;  // 速度补偿系数（补偿离心力，默认0.01，建议范围: 0.001 ~ 0.1）
 float turn_comp_max = 8.0f;       // 最大补偿角度限制（±8度）
 float servo_center_angle = 90.0f; // 舵机中点角度（默认90度）
 
@@ -38,15 +38,19 @@ void turn_compensation_init(void)
 }
 
 //-------------------------------------------------------------------------------------------------------------------
-// 函数简介     计算转弯补偿角度（动态零点补偿算法）
+// 函数简介     计算转弯补偿角度（分离式补偿算法）
 // 参数说明     servo_angle: 当前舵机角度（度）
 //              speed: 当前速度（编码器反馈值）
 // 返回参数     float: 补偿角度（度）
 // 使用示例     float compensation = turn_compensation_calculate(servo_angle, encoder[1]);
-// 备注信息     物理意义：车辆转向时需要补偿两部分：
-//              1. 基础补偿：舵机偏转导致的静态重心偏移（与速度无关，速度为0时也存在）
-//              2. 动态补偿：转向产生的离心力（与速度平方成正比）
-//              补偿公式：dynamic_zero = K_angle * servo_deviation + K_speed * speed^2 * servo_deviation
+// 备注信息     物理意义：
+//              1. 舵机补偿：舵机偏转导致的静态重心偏移（与速度无关）
+//              2. 速度补偿：转向产生的离心力（只与速度和转向方向有关）
+//              算法优势：分离设计避免了舵机偏差误差在高速时被放大
+//              补偿公式：
+//              - 舵机补偿 = K_servo × servo_deviation
+//              - 速度补偿 = K_speed × speed² × sign(servo_deviation)
+//              - 总补偿 = 舵机补偿 + 速度补偿
 //              正值表示需要向左倾斜补偿，负值表示向右倾斜补偿
 //-------------------------------------------------------------------------------------------------------------------
 float turn_compensation_calculate(float servo_angle, float speed)
@@ -54,32 +58,42 @@ float turn_compensation_calculate(float servo_angle, float speed)
     // 1. 计算舵机偏离中点的角度
     float servo_deviation = servo_angle - servo_center_angle;
 
-    // 2. 基础补偿：基于舵机角度（即使速度为0也需要补偿重心偏移）
-    float base_compensation = turn_comp_k_angle * servo_deviation;
+    // 2. 舵机补偿：只补偿舵机偏转导致的静态重心偏移
+    //    即使速度为0，舵机偏转也会造成重心偏移
+    float servo_compensation = turn_comp_k_servo * servo_deviation;
 
-    // 3. 动态补偿：速度越快，离心力越大，需要额外补偿
-    //    速度平方项：模拟离心力与速度平方成正比的关系
-    float dynamic_compensation = turn_comp_k_speed * fabs(speed) * fabs(speed) * servo_deviation;
+    // 3. 速度补偿：只补偿高速转向时的离心力
+    //    关键：只取转向方向（正负），不取舵机偏差的具体数值
+    //    这样避免了舵机偏差误差在高速时被放大
+    float turn_direction = 0.0f;
+    if (servo_deviation > 0.5f)        // 向右转
+        turn_direction = 1.0f;
+    else if (servo_deviation < -0.5f)  // 向左转
+        turn_direction = -1.0f;
+    // else 直行时 turn_direction = 0
 
-    // 4. 总补偿 = 基础补偿 + 动态补偿
-    //    - 基础补偿：补偿静态重心偏移（速度为0时仍存在）
-    //    - 动态补偿：补偿离心力影响（速度越快影响越大）
-    float dynamic_zero = base_compensation + dynamic_compensation;
+    // 速度补偿：与速度平方成正比（模拟离心力）
+    float speed_compensation = turn_comp_k_speed * fabs(speed) * fabs(speed) * turn_direction;
+
+    // 4. 总补偿 = 舵机补偿 + 速度补偿
+    //    - 舵机补偿：补偿静态重心偏移（低速高速都存在）
+    //    - 速度补偿：补偿动态离心力（只在高速时显著）
+    float total_compensation = servo_compensation + speed_compensation;
 
     // 5. 限幅处理：防止过度补偿
-    if (dynamic_zero > turn_comp_max)
+    if (total_compensation > turn_comp_max)
     {
-        dynamic_zero = turn_comp_max;
+        total_compensation = turn_comp_max;
     }
-    else if (dynamic_zero < -turn_comp_max)
+    else if (total_compensation < -turn_comp_max)
     {
-        dynamic_zero = -turn_comp_max;
+        total_compensation = -turn_comp_max;
     }
 
     // 保存当前补偿值（用于调试显示）
-    current_compensation = dynamic_zero;
+    current_compensation = total_compensation;
 
-    return dynamic_zero;
+    return total_compensation;
 }
 
 //-------------------------------------------------------------------------------------------------------------------
