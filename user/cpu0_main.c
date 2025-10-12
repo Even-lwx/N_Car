@@ -70,7 +70,8 @@ int core0_main(void)
         if (enable)
         {
             // Cargo 模式运行中，停止菜单刷新
-            // 在这里添加你需要在 Cargo 模式执行的代码
+            // 图像处理（在主循环中执行，避免占用中断时间）
+            image_process();
 
             // 例如：实时显示调试信息
             // printf("%f,%d,%f\r\n", imu_data.pitch, imu_data.gyro_y, filtered_motor_output);
