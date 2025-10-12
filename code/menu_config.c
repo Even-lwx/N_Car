@@ -20,6 +20,7 @@
 #include "servo.h"
 #include "delayed_stop.h"
 #include "turn_compensation.h"
+#include "Image Binarization.h"
 
 /**************** 外部声明（来自menu.c的内核函数） ****************/
 extern void ips_clear(void);
@@ -480,39 +481,32 @@ Page page_debug = {
 //============================================================
 void camera_display_mode(void)
 {
-    uint8 display_mode = 0;  // 显示模式：0=灰度图，1=二值化图
-    uint8 threshold = 128;    // 二值化阈值（默认128）
+    uint8 display_mode = 0;  // 显示模式：0=灰度图，1=二值化图（使用大津法阈值）
+    uint8 threshold = 128;    // 二值化阈值（默认128，二值化模式下会动态计算）
     uint8 key = KEY_NONE;
 
     ips_clear();
 
     while (1)
     {
-        // 显示标题（根据模式显示不同提示）
-        if (display_mode == 0)
+        uint8 image_threshold = 0;
+
+        // 如果是二值化模式，使用大津法动态计算阈值
+        if (display_mode == 1)
         {
-            show_string(0, 0, "Gray [OK:Binary]");
-        }
-        else
-        {
-            show_string(0, 0, "Binary [OK:Gray]");
+            threshold = otsu_get_threshold(mt9v03x_image[0], MT9V03X_W, MT9V03X_H);
+            image_threshold = threshold;
         }
 
-        // 显示摄像头图像
-        // 参数说明：
-        // (0, 8) - 显示起始位置（像素坐标，从第8像素开始，留出标题8像素）
-        // mt9v03x_image[0] - 图像数据指针
-        // MT9V03X_W, MT9V03X_H - 原始图像尺寸 (188x120)
-        // MT9V03X_W, MT9V03X_H - 显示图像尺寸（1:1显示，不压缩）
-        // threshold - 阈值（0=灰度图，非0=二值化图）
-        //
-        // 布局计算：
-        // - 屏幕：240宽 × 135高
-        // - 标题：8像素（字符行0）
-        // - 图像：188宽 × 120高（1:1显示）
-        // - 总高度：8 + 120 = 128像素 < 135像素 ✓
-        uint8 image_threshold = (display_mode == 0) ? 0 : threshold;
-        ips114_show_gray_image(0, 8, mt9v03x_image[0], MT9V03X_W, MT9V03X_H, MT9V03X_W, MT9V03X_H, image_threshold);
+        // 每次循环都刷新图像（摄像头是实时采集的）
+        ips114_show_gray_image(0, 0, mt9v03x_image[0], MT9V03X_W, MT9V03X_H, MT9V03X_W, MT9V03X_H, image_threshold);
+
+        // 在屏幕右上角显示当前阈值（二值化模式下显示大津法计算的阈值）
+        if (display_mode == 1)
+        {
+            show_string(18, 0, "T:");
+            show_int(20, 0, threshold, 3);
+        }
 
         // 扫描按键
         key = Key_Scan();
@@ -521,7 +515,7 @@ void camera_display_mode(void)
         if (key == KEY_OK)
         {
             display_mode = !display_mode;  // 在0和1之间切换
-            system_delay_ms(200);  // 防止按键连续触发
+            system_delay_ms(200);          // 防止按键连续触发
         }
         // 检测返回键 - 退出
         else if (key == KEY_BACK)
@@ -529,7 +523,7 @@ void camera_display_mode(void)
             break;
         }
 
-        system_delay_ms(50); // 约20fps刷新率
+        system_delay_ms(50); // 适当延迟，避免刷新过快
     }
 }
 
