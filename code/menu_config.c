@@ -48,6 +48,7 @@ extern int16 encoder[2];     // 类型为 int16 (不是 int32)
 // 在页面相互引用前需要前置声明
 extern Page page_turn_comp;     // 转弯补偿参数页面
 extern Page page_motor_protect; // 电机保护参数页面
+extern Page page_steer_pid;     // 转向PID参数页面
 
 //============================================================
 // 1. 示例菜单 - Example Menu（可选，供参考）
@@ -258,10 +259,10 @@ Page page_motor_protect = {
 Page page_pid = {
     .name = "PID Params",
     .data = NULL,
-    .len = 7,
+    .len = 8,
     .stage = Menu,
     .back = NULL, // 在 Menu_Config_Init() 中设置
-    .enter = {&page_gyro_pid, &page_angle_pid, &page_speed_pid, &page_drive_speed_pid, &page_output_smooth, &page_motor_protect, &page_turn_comp},
+    .enter = {&page_gyro_pid, &page_angle_pid, &page_speed_pid, &page_drive_speed_pid, &page_output_smooth, &page_motor_protect, &page_turn_comp, &page_steer_pid},
     .content = {NULL},
     .order = 0,
     .scroll_offset = 0,
@@ -286,6 +287,34 @@ Page page_turn_comp = {
     .name = "Turn Compensation",
     .data = turn_comp_data,
     .len = 4,
+    .stage = Menu,
+    .back = NULL, // 在 Menu_Config_Init() 中设置
+    .enter = {NULL},
+    .content = {NULL},
+    .order = 0,
+    .scroll_offset = 0,
+};
+
+//============================================================
+// 4.2 转向PID参数菜单 - Steering PID (Image Error P + Gyro Gz D)
+//============================================================
+float steer_kp_step[] = {0.01f, 0.1f, 1.0f, 5.0f};
+float steer_kd_step[] = {0.001f, 0.01f, 0.1f};
+float steer_limit_step[] = {1.0f, 5.0f, 10.0f};
+uint8 sample_row_step[] = {1, 5, 10};
+
+CustomData steer_pid_data[] = {
+    {&steer_kp, data_float_show, "Kp (Image)", steer_kp_step, 4, 0, 3, 2},
+    {&steer_kd, data_float_show, "Kd (Gyro Gz)", steer_kd_step, 3, 0, 3, 3},
+    {&steer_output_limit, data_float_show, "Output Limit", steer_limit_step, 3, 0, 4, 1},
+    {&steer_sample_start, data_uint32_show, "Sample Start", sample_row_step, 3, 0, 3, 0},
+    {&steer_sample_end, data_uint32_show, "Sample End", sample_row_step, 3, 0, 3, 0},
+};
+
+Page page_steer_pid = {
+    .name = "Steer PID",
+    .data = steer_pid_data,
+    .len = 5,
     .stage = Menu,
     .back = NULL, // 在 Menu_Config_Init() 中设置
     .enter = {NULL},
@@ -520,6 +549,7 @@ void camera_display_mode(void)
         // 检测返回键 - 退出
         else if (key == KEY_BACK)
         {
+            ips_clear();  // 退出前清空屏幕，避免和菜单渲染冲突
             break;
         }
 
@@ -580,6 +610,7 @@ void Menu_Config_Init(void)
     page_output_smooth.back = &page_pid;
     page_motor_protect.back = &page_pid;
     page_turn_comp.back = &page_pid;
+    page_steer_pid.back = &page_pid;  // 转向PID参数页面
 
     // 设置IMU子页面的父指针
     page_imu_params.back = &page_imu;

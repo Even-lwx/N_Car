@@ -74,6 +74,9 @@ int core0_main(void)
             // 图像处理（在主循环中执行，避免占用中断时间）
             image_process();
 
+            // 转向PID控制（基于图像偏差和陀螺仪gz）
+            steer_pid_control();
+
             // 例如：实时显示调试信息
             // printf("%f,%d,%f\r\n", imu_data.pitch, imu_data.gyro_y, filtered_motor_output);
             printf("%f,%d\r\n", drive_pwm_output, encoder[1]);

@@ -2,6 +2,7 @@
 #include "delayed_stop.h"
 #include "turn_compensation.h"
 #include "servo.h"
+#include "image.h"
 #include "zf_common_headfile.h"
 
 // *************************** 宏定义 ***************************
@@ -42,6 +43,22 @@ PID_Controller drive_speed_pid = {
     .max_integral = 100.0f,
     .max_output = 10000.0f // 行进轮速度环输出PWM值
 };
+
+// 转向PID控制器（不使用标准PID结构，仅使用P和D）
+PID_Controller steer_pid = {
+    .kp = 0.0f,
+    .ki = 0.0f,
+    .kd = 0.0f,
+    .max_integral = 0.0f,
+    .max_output = 0.0f
+};
+
+// 转向PID参数
+float steer_kp = 0.5f;             // 转向P系数（基于图像偏差）
+float steer_kd = 0.01f;            // 转向D系数（基于陀螺仪gz）
+float steer_output_limit = 30.0f;  // 转向输出限幅（舵机角度限制）
+uint8 steer_sample_start = 100;    // 图像采样起始行（从底部算起，越大越近）
+uint8 steer_sample_end = 110;      // 图像采样结束行
 
 // 目标值
 float target_gyro_rate = 0.0f;    // 目标角速度
@@ -219,12 +236,17 @@ void control(void)
 
         drive_speed_loop_control();
     }
+
+    // 转向PID控制（20ms周期，与图像处理同步）
+    // 注意：转向控制需要在主循环中调用，因为需要最新的图像数据
+    // 这里只是预留接口，实际调用在主循环的image_process()之后
+
     // 防止计数器溢出
     if (count >= 1000)
     {
         count = 0;
     }
-   
+
 }
 
 /**
@@ -252,6 +274,11 @@ void pid_init(void)
     drive_speed_pid.last_error = 0;
     drive_speed_pid.integral = 0;
     drive_speed_pid.output = 0;
+
+    steer_pid.error = 0;
+    steer_pid.last_error = 0;
+    steer_pid.integral = 0;
+    steer_pid.output = 0;
 
     // 初始化滤波器状态
     filtered_motor_output = 0.0f;
@@ -411,3 +438,41 @@ float get_angle_protection(void)
 {
     return angle_protection;
 }
+
+/**
+ * @brief 转向PID控制
+ * @note P环基于图像中线偏差，D环基于陀螺仪gz（Z轴角速度）
+ *       输出控制舵机打角
+ */
+void steer_pid_control(void)
+{
+    // 1. 计算图像中线偏差（P环）
+    float image_error = err_sum_average(steer_sample_start, steer_sample_end);
+
+    // 2. 获取陀螺仪gz（Z轴角速度，偏航角速度）作为D环
+    float gyro_gz = (float)imu_data.gyro_z;
+
+    // 3. 计算转向输出：P * 图像偏差 + D * 陀螺仪gz
+    float steer_output = steer_kp * image_error + steer_kd * gyro_gz;
+
+    // 4. 输出限幅
+    steer_output = constrain(steer_output, -steer_output_limit, steer_output_limit);
+
+    // 5. 输出到舵机（加上舵机中心角度）
+    float servo_angle = servo_center_angle + steer_output;
+    servo_set_angle(servo_angle);
+}
+
+/**
+ * @brief 设置转向PID参数
+ * @param kp    P系数（基于图像偏差）
+ * @param kd    D系数（基于陀螺仪gz）
+ * @param limit 输出限幅（舵机角度限制）
+ */
+void set_steer_pid_params(float kp, float kd, float limit)
+{
+    steer_kp = kp;
+    steer_kd = kd;
+    steer_output_limit = limit;
+}
+

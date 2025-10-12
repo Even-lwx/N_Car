@@ -12,8 +12,8 @@ volatile int right_circle_flag = 0; // 右环岛标志（0/1/2/3不同状态）
 volatile int Island_State = 0; // 环岛状态标志
 
 // 编码器变量定义
-int Encoder_Left = 0;  // 左编码器累计值
-int encoder_sum = 0;   // 编码器总和
+int Encoder_Left = 0; // 左编码器累计值
+int encoder_sum = 0;  // 编码器总和
 
 // 图像副本数组定义
 uint8 image_copy[IMAGE_HEIGHT][IMAGE_WIDTH]; // 图像副本数组
@@ -201,14 +201,14 @@ void Longest_White_Column() // �����Ѳ��
         if (Boundry_Start_Right == 0 && Right_Lost_Flag[i] != 1)
             Boundry_Start_Right = i;
         Road_Wide[i] = Right_Line[i] - Left_Line[i];
-			//	printf("%d,%d\r\n",i, Road_Wide[i]);
+        //	printf("%d,%d\r\n",i, Road_Wide[i]);
     }
 
     // debugʹ�ã���Ļ��ʾ��ز���
-    //    ips200_showint16(0,0, Longest_White_Column_Right[0]);//��0���ǰ��г���
-    //    ips200_showint16(0,1, Longest_White_Column_Right[1]);//��1�����±꣬��j��)
-    //    ips200_showint16(0,2, Longest_White_Column_Left[0]);//��0���ǰ��г���
-    //    ips200_showint16(0,3, Longest_White_Column_Left[1]);//��1�����±꣬��j��)
+    //    ips200_showint16(0,0, Longest_White_Column_Right[0]);
+    //    ips200_showint16(0,1, Longest_White_Column_Right[1]);
+    //    ips200_showint16(0,2, Longest_White_Column_Left[0]);
+    //    ips200_showint16(0,3, Longest_White_Column_Left[1]);
 }
 
 /*-------------------------------------------------------------------------------------------------------------------
@@ -780,8 +780,8 @@ void Ramp_Detect(void)
 
     if (count >= 10) // �����������ﵽ��ֵ
     {
-        //buzzer_on(50);
-				Ramp_Flag = 1;
+        // buzzer_on(50);
+        Ramp_Flag = 1;
         int err;
         Encoder_Sum = Encoder_Left + Encoder_Left;
         err = Encoder_Sum - Encoder_Sum_Last;
@@ -791,18 +791,18 @@ void Ramp_Detect(void)
 
             /*�µ�ǰ�ĵ��� */
 
-            if (err < -100) // ���������µ��ϵ�����(����)
+            if (err < -100) // ���������µ��ϵ�����
             {
-                //buzzer_on(50);
+                // buzzer_on(50);
                 Ramp_Flag = 2;
             }
         }
         else if (Ramp_Flag == 2)
         {
             /*�µ���*/
-            if (err > 100) // ��ʼ����(����)
+            if (err > 100) // ��ʼ����
             {
-                //buzzer_on(50);
+                // buzzer_on(50);
                 Ramp_Flag = 3;
             }
         }
@@ -812,15 +812,15 @@ void Ramp_Detect(void)
 
             if (encoder_sum > 30000) // ����µ�������
             {
-                //buzzer_on(50);
+                // buzzer_on(50);
                 Ramp_Flag = 0;
             }
         }
     }
-		else
-		{
-				Ramp_Flag=0;
-		}
+    else
+    {
+        Ramp_Flag = 0;
+    }
 
     // �����ã���ʾ�����м���������Ŀ��������ʾ������
     // ips200_showuint8(50, 10*16, count, 5);
@@ -853,7 +853,7 @@ float err_sum_average(uint8 start_point, uint8 end_point)
     {
         err += (MT9V03X_W / 2 - ((Left_Line[i] + Right_Line[i]) >> 1)); // λ������Ч����2
     }
-    err = err / (end_point - start_point+1);
+    err = err / (end_point - start_point + 1);
     return err;
 }
 
@@ -901,8 +901,8 @@ void image_process(void)
     Longest_White_Column();
 
     // 2. 元素检测
-    Cross_Detect();      // 十字检测
-    Ramp_Detect();       // 坡道检测
+    Cross_Detect(); // 十字检测
+    Ramp_Detect();  // 坡道检测
 
     // 3. 显示边界线（可选，调试时启用）
     // Show_Boundry();
