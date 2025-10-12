@@ -481,19 +481,23 @@ Page page_debug = {
 void camera_display_mode(void)
 {
     ips_clear();
-    show_string(0, 0, "Camera View");
-    show_string(0, 15, "Press BACK");
+    show_string(0, 0, "Camera  [BACK:Exit]");
 
     while (1)
     {
         // 显示摄像头图像
         // 参数说明：
-        // (0, 8) - 显示起始坐标 (从第8行开始显示，留出标题空间)
+        // (0, 8) - 显示起始位置（像素坐标，从第8像素开始，留出标题8像素）
         // mt9v03x_image[0] - 图像数据指针
         // MT9V03X_W, MT9V03X_H - 原始图像尺寸 (188x120)
-        // MT9V03X_W, MT9V03X_H - 显示图像尺寸 (188x120，不缩放)
-        // 0 - 阈值（0表示显示灰度图，非0表示二值化）
-        ips114_show_gray_image(0, 8, mt9v03x_image[0], MT9V03X_W, MT9V03X_H, MT9V03X_W, MT9V03X_H, 0);
+        // 165, 110 - 显示图像尺寸（缩小以适应屏幕：240x135像素）
+        // 0 - 阈值（0=灰度图，非0=二值化图）
+        //
+        // 布局计算：
+        // - 标题占用：8像素（字符行0）
+        // - 图像高度：110像素（缩小后）
+        // - 总高度：8 + 110 = 118像素 < 135像素 ✓
+        ips114_show_gray_image(0, 8, mt9v03x_image[0], MT9V03X_W, MT9V03X_H, 165, 110, 0);
 
         // 检测返回键
         if (Key_Scan() == KEY_BACK)
