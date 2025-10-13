@@ -494,7 +494,7 @@ void camera_display_mode(void)
         // 如果是二值化模式，使用大津法动态计算阈值
         if (display_mode == 1)
         {
-            threshold = otsu_get_threshold(mt9v03x_image[0], MT9V03X_W, MT9V03X_H);
+            threshold = (uint8)otsu_get_threshold(mt9v03x_image[0], MT9V03X_W, MT9V03X_H);
             image_threshold = threshold;
         }
 

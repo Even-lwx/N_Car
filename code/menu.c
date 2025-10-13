@@ -186,7 +186,7 @@ void Menu_Back(void)
                 // 将光标移动到第0项（Cargo）
                 Now_Menu->order = 0;
                 Now_Menu->scroll_offset = 0;
-                // 不需要刷新整个屏幕，光标位置自动更新
+                need_refresh = 1; // 需要刷新屏幕以更新滚动显示
             }
         }
     }
