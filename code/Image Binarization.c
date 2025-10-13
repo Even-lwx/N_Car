@@ -1,18 +1,19 @@
-#include "zf_common_headfile.h"
-#include <math.h>
 #include "Image Binarization.h"
+#include "zf_common_headfile.h"
 
-uint8 binaryImage[IMAGE_HEIGHT][IMAGE_WIDTH];      // ×îÖÕÊä³ö½á¹ûµÄÊı×é
-uint8 boundary_image[IMAGE_HEIGHT][IMAGE_WIDTH];   // ±ß½çÍ¼Ïñ
-uint8 centerline_image[IMAGE_HEIGHT][IMAGE_WIDTH]; // ÖĞĞÄÏßÍ¼Ïñ
-int center_points[IMAGE_HEIGHT];                   // ´æ´¢Ã¿ĞĞµÄÖĞĞÄµã×ø±ê
+
+
+uint8 binaryImage[IMAGE_HEIGHT][IMAGE_WIDTH];      // æœ€ç»ˆè¾“å‡ºç»“æœçš„æ•°ç»„
+uint8 boundary_image[IMAGE_HEIGHT][IMAGE_WIDTH];   // è¾¹ç•Œå›¾åƒ
+uint8 centerline_image[IMAGE_HEIGHT][IMAGE_WIDTH]; // ä¸­å¿ƒçº¿å›¾åƒ
+int center_points[IMAGE_HEIGHT];                   // å­˜å‚¨æ¯è¡Œçš„ä¸­å¿ƒç‚¹åæ ‡
 
 /**
- * @brief  otsuËã·¨»ñÈ¡ãĞÖµ
- * @param  *image Í¼ÏñÊı×éÖ¸Õë
- * @param  col Í¼Ïñ¿í¶È
- * @param  row Í¼Ïñ¸ß¶È
- * @retval ãĞÖµ
+ * @brief  otsuç®—æ³•è·å–é˜ˆå€¼
+ * @param  *image å›¾åƒæ•°ç»„æŒ‡é’ˆ
+ * @param  col å›¾åƒå®½åº¦
+ * @param  row å›¾åƒé«˜åº¦
+ * @retval é˜ˆå€¼
  */
 int otsu_get_threshold(uint8* image, uint16 col, uint16 row)
 {
@@ -31,32 +32,32 @@ int otsu_get_threshold(uint8* image, uint16 col, uint16 row)
         pixelPro[i] = 0;
     }
     uint32 gray_sum = 0;
-    // Í³¼Æ»Ò¶È¼¶ÖĞÃ¿¸öÏñËØÔÚÕû·ùÍ¼ÏñÖĞµÄ¸öÊı
+    // ç»Ÿè®¡ç°åº¦çº§ä¸­æ¯ä¸ªåƒç´ åœ¨æ•´å¹…å›¾åƒä¸­çš„ä¸ªæ•°
     for (i = 0; i < height; i += 2)
     {
         for (j = 0; j < width; j += 2)
         {
-            pixelCount[(int)data[i * width + j]]++; // ½«µ±Ç°µÄµãµÄÏñËØÖµ×÷Îª¼ÆÊıÊı×éµÄÏÂ±ê
-            gray_sum += (int)data[i * width + j];   // »Ò¶ÈÖµ×ÜºÍ
+            pixelCount[(int)data[i * width + j]]++; // å°†å½“å‰çš„ç‚¹çš„åƒç´ å€¼ä½œä¸ºè®¡æ•°æ•°ç»„çš„ä¸‹æ ‡
+            gray_sum += (int)data[i * width + j];   // ç°åº¦å€¼æ€»å’Œ
         }
     }
-    // ¼ÆËãÃ¿¸öÏñËØÖµµÄµãÔÚÕû·ùÍ¼ÏñÖĞµÄ±ÈÀı
+    // è®¡ç®—æ¯ä¸ªåƒç´ å€¼çš„ç‚¹åœ¨æ•´å¹…å›¾åƒä¸­çš„æ¯”ä¾‹
     for (i = 0; i < GrayScale; i++)
     {
         pixelPro[i] = (float)pixelCount[i] / pixelSum;
     }
-    // ±éÀú»Ò¶È¼¶[0,255]
+    // éå†ç°åº¦çº§[0,255]
     float w0, w1, u0tmp, u1tmp, u0, u1, u, deltaTmp, deltaMax = 0;
     w0 = w1 = u0tmp = u1tmp = u0 = u1 = u = deltaTmp = 0;
     for (j = 0; j < GrayScale; j++)
     {
-        w0 += pixelPro[j];        // ±³¾°²¿·ÖÃ¿¸ö»Ò¶ÈÖµµÄÏñËØµãËùÕ¼±ÈÀıÖ®ºÍ   ¼´±³¾°²¿·ÖµÄ±ÈÀı
-        u0tmp += j * pixelPro[j]; // ±³¾°²¿·Ö Ã¿¸ö»Ò¶ÈÖµµÄµãµÄ±ÈÀı *»Ò¶ÈÖµ
+        w0 += pixelPro[j];        // èƒŒæ™¯éƒ¨åˆ†æ¯ä¸ªç°åº¦å€¼çš„åƒç´ ç‚¹æ‰€å æ¯”ä¾‹ä¹‹å’Œ   å³èƒŒæ™¯éƒ¨åˆ†çš„æ¯”ä¾‹
+        u0tmp += j * pixelPro[j]; // èƒŒæ™¯éƒ¨åˆ† æ¯ä¸ªç°åº¦å€¼çš„ç‚¹çš„æ¯”ä¾‹ *ç°åº¦å€¼
         w1 = 1 - w0;
         u1tmp = gray_sum / pixelSum - u0tmp;
-        u0 = u0tmp / w0;   // ±³¾°Æ½¾ù»Ò¶È
-        u1 = u1tmp / w1;   // Ç°¾°Æ½¾ù»Ò¶È
-        u = u0tmp + u1tmp; // È«¾ÖÆ½¾ù»Ò¶È
+        u0 = u0tmp / w0;   // èƒŒæ™¯å¹³å‡ç°åº¦
+        u1 = u1tmp / w1;   // å‰æ™¯å¹³å‡ç°åº¦
+        u = u0tmp + u1tmp; // å…¨å±€å¹³å‡ç°åº¦
         deltaTmp = w0 * pow((u0 - u), 2) + w1 * pow((u1 - u), 2);
         if (deltaTmp > deltaMax)
         {
@@ -72,7 +73,7 @@ int otsu_get_threshold(uint8* image, uint16 col, uint16 row)
 }
 
 
-//  Ó¦ÓÃãĞÖµº¯Êı£¬Éú³É¶şÖµ»¯Í¼Ïñ
+//  åº”ç”¨é˜ˆå€¼å‡½æ•°ï¼Œç”ŸæˆäºŒå€¼åŒ–å›¾åƒ
 //--------------------------------------------------------------
 void applyThreshold(uint8 input[][IMAGE_WIDTH],
                     uint8 output[][IMAGE_WIDTH],
@@ -82,27 +83,27 @@ void applyThreshold(uint8 input[][IMAGE_WIDTH],
     {
         for (int j = 0; j < IMAGE_WIDTH; j++)
         {
-            // Ê¹ÓÃÌõ¼ş±í´ïÊ½ÓÅ»¯¶şÖµ»¯
+            // ä½¿ç”¨æ¡ä»¶è¡¨è¾¾å¼ä¼˜åŒ–äºŒå€¼åŒ–
             output[i][j] = (input[i][j] > threshold) ? 255 : 0;
         }
     }
 }
 
-// // ´ó½ò·¨£¨·µ»ØãĞÖµ£©
+// // å¤§æ´¥æ³•ï¼ˆè¿”å›é˜ˆå€¼ï¼‰
 // //--------------------------------------------------------------
 // int otsuThreshold(uint8 image[][IMAGE_WIDTH])
 // {
-//     uint32 histogram[256] = {0}; // »Ò¶ÈÖ±·½Í¼
+//     uint32 histogram[256] = {0}; // ç°åº¦ç›´æ–¹å›¾
 //     uint32 total_pixels = (uint32_t)IMAGE_HEIGHT * IMAGE_WIDTH;
-//     uint64 sum = 0;           // ×Ü»Ò¶ÈÖµ
-//     uint64 sumB = 0;          // ±³¾°Àà»Ò¶È×ÜºÍ
-//     uint32 wB = 0;            // ±³¾°ÀàÏñËØÊı
-//     uint64 maxVariance = 0;   // ×î´óÀà¼ä·½²î
-//     int threshold = 0;        // ×î¼ÑãĞÖµ
-//     int declineCount = 0;     // ·½²îÏÂ½µ¼ÆÊıÆ÷
-//     const int maxDecline = 2; // ×î´óÔÊĞíÁ¬ĞøÏÂ½µ´ÎÊı
+//     uint64 sum = 0;           // æ€»ç°åº¦å€¼
+//     uint64 sumB = 0;          // èƒŒæ™¯ç±»ç°åº¦æ€»å’Œ
+//     uint32 wB = 0;            // èƒŒæ™¯ç±»åƒç´ æ•°
+//     uint64 maxVariance = 0;   // æœ€å¤§ç±»é—´æ–¹å·®
+//     int threshold = 0;        // æœ€ä½³é˜ˆå€¼
+//     int declineCount = 0;     // æ–¹å·®ä¸‹é™è®¡æ•°å™¨
+//     const int maxDecline = 2; // æœ€å¤§å…è®¸è¿ç»­ä¸‹é™æ¬¡æ•°
 
-//     // ¼ÆËã»Ò¶ÈÖ±·½Í¼ºÍ×Ü»Ò¶ÈÖµ
+//     // è®¡ç®—ç°åº¦ç›´æ–¹å›¾å’Œæ€»ç°åº¦å€¼
 //     for (int i = 0; i < IMAGE_HEIGHT; i++)
 //     {
 //         for (int j = 0; j < IMAGE_WIDTH; j++)
@@ -113,8 +114,8 @@ void applyThreshold(uint8 input[][IMAGE_WIDTH],
 //         }
 //     }
 
-//     // ±éÀú¿ÉÄÜµÄãĞÖµ£¨ÀûÓÃµ¥·åÌØĞÔÌáÇ°ÖÕÖ¹£©
-//     for (int t = 0; t < 256; t += 2) // ¼ä¸ô2¸ö¼ÆËã£¬Ìá¸ßÔËĞĞËÙ¶È
+//     // éå†å¯èƒ½çš„é˜ˆå€¼ï¼ˆåˆ©ç”¨å•å³°ç‰¹æ€§æå‰ç»ˆæ­¢ï¼‰
+//     for (int t = 0; t < 256; t += 2) // é—´éš”2ä¸ªè®¡ç®—ï¼Œæé«˜è¿è¡Œé€Ÿåº¦
 //     {
 //         if (histogram[t] == 0)
 //             continue;
@@ -129,19 +130,19 @@ void applyThreshold(uint8 input[][IMAGE_WIDTH],
 
 //         sumB += (uint64)t * histogram[t];
 
-//         // ¼ÆËã±³¾°ºÍÇ°¾°µÄÆ½¾ù»Ò¶È
+//         // è®¡ç®—èƒŒæ™¯å’Œå‰æ™¯çš„å¹³å‡ç°åº¦
 //         uint64 mB = sumB / wB;
 //         uint64 mF = (sum - sumB) / wF;
 
-//         // ¼ÆËãÀà¼ä·½²î
+//         // è®¡ç®—ç±»é—´æ–¹å·®
 //         uint64 variance = (uint64)wB * wF * (mB - mF) * (mB - mF);
 
-//         // ¼ì²â·½²îÏÂ½µÇ÷ÊÆ
+//         // æ£€æµ‹æ–¹å·®ä¸‹é™è¶‹åŠ¿
 //         if (variance >= maxVariance)
 //         {
 //             maxVariance = variance;
 //             threshold = t;
-//             declineCount = 0; // ÖØÖÃÏÂ½µ¼ÆÊıÆ÷
+//             declineCount = 0; // é‡ç½®ä¸‹é™è®¡æ•°å™¨
 //         }
 //         else
 //         {

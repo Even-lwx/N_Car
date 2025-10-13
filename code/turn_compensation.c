@@ -10,7 +10,7 @@
 
 #include "turn_compensation.h"
 #include "zf_common_headfile.h"
-#include <math.h>
+
 
 // *************************** 全局变量定义 ***************************
 float turn_comp_k_servo = 0.1f;   // 舵机补偿系数（补偿重心偏移，默认0.1，建议范围: 0.01 ~ 1.0）

@@ -4,10 +4,9 @@
   自动遍历菜单系统，保存/加载所有参数
   添加新菜单参数无需修改此文件！
 *********************************************************************/
-
-#include "zf_common_headfile.h"
 #include "param_save.h"
-#include "menu.h"
+#include "zf_common_headfile.h"
+
 
 /**************** 外部变量声明 ****************/
 extern Page *Now_Menu;

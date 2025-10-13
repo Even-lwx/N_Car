@@ -1,112 +1,139 @@
-#include "zf_common_headfile.h"
+/*********************************************************************
+ * 文件: image.c
+ * 图像处理实现文件
+ * 说明：实现赛道图像处理的核心功能
+ *       包括边界提取、元素识别（十字路口、环岛、坡道、斑马线等）
+ *       使用大津法自动阈值和双边巡线算法
+ ********************************************************************/
+
 #include "image.h"
+#include "zf_common_headfile.h"
 
-#define IMG_BLACK 0   // 0x00�Ǻ�
-#define IMG_WHITE 255 // 0xffΪ��
+//============================================================
+// 宏定义
+//============================================================
 
-// 环岛检测变量定义
-volatile int circle_flag = 0;       // 环岛标志（0=无环岛，非0=有环岛）
+#define IMG_BLACK 0     // 黑色像素值
+#define IMG_WHITE 255   // 白色像素值
+
+//============================================================
+// 全局变量定义
+//============================================================
+
+// -------------------- 元素检测标志 --------------------
+volatile int circle_flag = 0;       // 环岛标志
 volatile int right_circle_flag = 0; // 右环岛标志（0/1/2/3不同状态）
+volatile int Island_State = 0;      // 环岛状态
+volatile int Cross_Flag = 0;        // 十字路口检测标志
+volatile int Ramp_Flag = 0;         // 坡道检测标志
+int Ramp_offset;                    // 坡道偏移量
+volatile int Zebra_Stripes_Flag;    // 斑马线标志位
 
-// 环岛状态变量定义
-volatile int Island_State = 0; // 环岛状态标志
+// -------------------- 编码器相关 --------------------
+int Encoder_Left = 0;  // 左编码器累计值
+int encoder_sum = 0;   // 编码器总和
 
-// 编码器变量定义
-int Encoder_Left = 0; // 左编码器累计值
-int encoder_sum = 0;  // 编码器总和
+// -------------------- 图像数据数组 --------------------
+uint8 image_copy[IMAGE_HEIGHT][IMAGE_WIDTH];  // 图像副本数组
 
-// 图像副本数组定义
-uint8 image_copy[IMAGE_HEIGHT][IMAGE_WIDTH]; // 图像副本数组
+extern const uint8 Image_Flags[][9][8];       // 外部图像标志数组
+extern uint8_t binaryImage[IMAGE_HEIGHT][IMAGE_WIDTH]; // 二值化图像数组
 
-// ���û�������
-extern const uint8 Image_Flags[][9][8];                // ����ͼ�ϵ����ֱ��
-extern uint8_t binaryImage[IMAGE_HEIGHT][IMAGE_WIDTH]; // ��ֵ�����ԭ����
-volatile int Left_Line[MT9V03X_H];                     // ���������
-volatile int Right_Line[MT9V03X_H];                    // �ұ�������
-volatile int Mid_Line[MT9V03X_H];                      // ��������
-volatile int Road_Wide[MT9V03X_H];                     // ��������
-volatile int White_Column[MT9V03X_W];                  // ÿ�а��г���
-volatile int Search_Stop_Line;                         // ������ֹ��,ֻ��¼���ȣ���Ҫ������Ҫ����Ұ�߶ȼ�ȥ��ֵ
-volatile int Boundry_Start_Left;                       // ���ұ߽���ʼ��
-volatile int Boundry_Start_Right;                      // ��һ���Ƕ��ߵ�,����߽���ʼ��
-volatile int Left_Lost_Time;                           // �߽綪����
-volatile int Right_Lost_Time;
-volatile int Both_Lost_Time;                // ����ͬʱ������
-int Longest_White_Column_Left[2];           // �����,[0]������еĳ��ȣ�Ҳ����Search_Stop_Line������ֹ�У�[1���ǵ�ĳ��
-int Longest_White_Column_Right[2];          // �����,[0]������еĳ��ȣ�Ҳ����Search_Stop_Line������ֹ�У�[1���ǵ�ĳ��
-int Left_Lost_Flag[MT9V03X_H];              // �������飬������1��û������0
-int Right_Lost_Flag[MT9V03X_H];             // ��Standard_�������飬������1��û������0
-const uint8 Road_Standard_Wide[MT9V03X_H] = // ÿ�е�������
-    {
-        41, 42, 43, 45, 46, 47, 49, 49, 51, 53,
-        53, 55, 55, 57, 58, 59, 61, 62, 63, 64,
-        65, 67, 68, 69, 70, 72, 73, 74, 76, 76,
-        78, 79, 80, 82, 82, 84, 86, 86, 88, 88,
-        90, 91, 92, 94, 95, 96, 97, 98, 100, 100,
-        102, 103, 105, 105, 107, 108, 109, 111, 112, 113,
-        114, 116, 117, 118, 119, 120, 122, 123, 124, 126,
-        126, 128, 129, 130, 132, 132, 134, 134, 136, 138,
-        138, 140, 140, 142, 144, 144, 146, 146, 148, 149,
-        150, 151, 152, 154, 155, 156, 157, 158, 159, 161,
-        162, 163, 164, 165, 166, 167, 169, 170, 171, 172,
-        173, 175, 175, 177, 177, 179, 180, 181, 184, 184};
-/*����Ԫ�� */
+volatile int Left_Line[MT9V03X_H];            // 左边界数组
+volatile int Right_Line[MT9V03X_H];           // 右边界数组
+volatile int Mid_Line[MT9V03X_H];             // 中线数组
+volatile int Road_Wide[MT9V03X_H];            // 赛道宽度数组
+volatile int White_Column[MT9V03X_W];         // 白列统计数组
 
-// ʮ��
-volatile int Cross_Flag = 0;
-volatile int Left_Down_Find = 0; // ʮ��ʹ�ã��ҵ�����������û�ҵ�����0
-volatile int Left_Up_Find = 0;   // �ĸ��յ��־
-volatile int Right_Down_Find = 0;
-volatile int Right_Up_Find = 0;
+// -------------------- 边界搜索相关 --------------------
+volatile int Search_Stop_Line;                // 边界搜索停止行
+volatile int Boundry_Start_Left;              // 左边界起始行
+volatile int Boundry_Start_Right;             // 右边界起始行
+volatile int Left_Lost_Time;                  // 左边界丢失次数
+volatile int Right_Lost_Time;                 // 右边界丢失次数
+volatile int Both_Lost_Time;                  // 双边界丢失次数
 
-// ��������
-extern volatile int Island_State; // ����״̬��־
-extern volatile int Ramp_Flag;    // �µ�
+int Longest_White_Column_Left[2];             // 左侧最长白列：[0]长度，[1]列号
+int Longest_White_Column_Right[2];            // 右侧最长白列：[0]长度，[1]列号
 
-// �µ�
-volatile int Ramp_Flag = 0; // �µ���־
+int Left_Lost_Flag[MT9V03X_H];                // 左边界丢失标志数组
+int Right_Lost_Flag[MT9V03X_H];               // 右边界丢失标志数组
 
-int turn_start = 50;
-int turn_end = 53;
-/*-------------------------------------------------------------------------------------------------------------------
-  @brief     ˫�����Ѳ��
-  @param     null
-  @return    null
-  Sample     Longest_White_Column_Left();
-  @note      �����Ѳ�ߣ�Ѱ�ҳ�ʼ�߽磬���ߣ�����еȻ���Ԫ�أ�������ȡ��Щ��������������ʶ��
--------------------------------------------------------------------------------------------------------------------*/
-void Longest_White_Column() // �����Ѳ��
+// -------------------- 拐点检测 --------------------
+volatile int Left_Down_Find = 0;   // 左下拐点位置
+volatile int Left_Up_Find = 0;     // 左上拐点位置
+volatile int Right_Down_Find = 0;  // 右下拐点位置
+volatile int Right_Up_Find = 0;    // 右上拐点位置
+
+// -------------------- 赛道标准宽度查找表 --------------------
+const uint8 Road_Standard_Wide[MT9V03X_H] =
+{
+    41, 42, 43, 45, 46, 47, 49, 49, 51, 53,
+    53, 55, 55, 57, 58, 59, 61, 62, 63, 64,
+    65, 67, 68, 69, 70, 72, 73, 74, 76, 76,
+    78, 79, 80, 82, 82, 84, 86, 86, 88, 88,
+    90, 91, 92, 94, 95, 96, 97, 98, 100, 100,
+    102, 103, 105, 105, 107, 108, 109, 111, 112, 113,
+    114, 116, 117, 118, 119, 120, 122, 123, 124, 126,
+    126, 128, 129, 130, 132, 132, 134, 134, 136, 138,
+    138, 140, 140, 142, 144, 144, 146, 146, 148, 149,
+    150, 151, 152, 154, 155, 156, 157, 158, 159, 161,
+    162, 163, 164, 165, 166, 167, 169, 170, 171, 172,
+    173, 175, 175, 177, 177, 179, 180, 181, 184, 184
+};
+
+// -------------------- 图像处理基本参数 --------------------
+extern volatile int Island_State;  // 环岛状态（外部引用）
+extern volatile int Ramp_Flag;     // 坡道标志（外部引用）
+
+int turn_start = 50;  // 转弯检测起始行
+int turn_end = 53;    // 转弯检测结束行
+
+int threshold;         // 全局二值化阈值
+uint8 image_proess = 0; // 图像处理完成标志
+
+//============================================================
+// 函数实现
+//============================================================
+
+/**
+ * @brief 最长白列检测并提取边界
+ * @note 通过扫描每列的白色像素，找到最长的白色列作为起跑线或停止线的参考
+ *       同时从最长白列位置开始，向左右扫描边界
+ */
+void Longest_White_Column()
 {
     int i, j;
-    int start_column = 35;                 // ����е�������ʼ��
-    int end_column = MT9V03X_W - 35;       // ����е�������ֹ��
-    int left_border = 0, right_border = 0; // ��ʱ�洢����λ��
-    Longest_White_Column_Left[0] = 0;      // �����,[0]������еĳ��ȣ�[1���ǵ�ĳ��
-    Longest_White_Column_Left[1] = 0;      // �����,[0]������еĳ��ȣ�[1���ǵ�ĳ��
-    Longest_White_Column_Right[0] = 0;     // �����,[0]������еĳ��ȣ�[1���ǵ�ĳ��
-    Longest_White_Column_Right[1] = 0;     // �����,[0]������еĳ��ȣ�[1���ǵ�ĳ��
-    Right_Lost_Time = 0;                   // �߽綪����
-    Left_Lost_Time = 0;
-    Boundry_Start_Left = 0; // ��һ���Ƕ��ߵ�,����߽���ʼ��
-    Boundry_Start_Right = 0;
-    Both_Lost_Time = 0; // ����ͬʱ������
+    int start_column = 35;
+    int end_column = MT9V03X_W - 35;
+    int left_border = 0, right_border = 0;
 
-    /*��������*/
-    for (i = 0; i <= MT9V03X_H - 1; i++) // �������
+    // 初始化变量
+    Longest_White_Column_Left[0] = 0;
+    Longest_White_Column_Left[1] = 0;
+    Longest_White_Column_Right[0] = 0;
+    Longest_White_Column_Right[1] = 0;
+    Right_Lost_Time = 0;
+    Left_Lost_Time = 0;
+    Boundry_Start_Left = 0;
+    Boundry_Start_Right = 0;
+    Both_Lost_Time = 0;
+
+    // 初始化边界数组和丢失标志
+    for (i = 0; i <= MT9V03X_H - 1; i++)
     {
         Right_Lost_Flag[i] = 0;
         Left_Lost_Flag[i] = 0;
         Left_Line[i] = 0;
         Right_Line[i] = MT9V03X_W - 1;
     }
-    for (i = 0; i <= MT9V03X_W - 1; i++) // �������
+    for (i = 0; i <= MT9V03X_W - 1; i++)
     {
         White_Column[i] = 0;
     }
 
-    // ������Ҫ������з�Χ�����޶�������3״̬�Ҳ����Ͻǵ㣬�����޸���������
-    // ����2״̬��Ҫ�ı������Ѱ�ҷ�Χ
-    if (circle_flag) // �һ�
+    // 环岛状态下调整扫描范围
+    if (circle_flag)
     {
         if (right_circle_flag == 2)
         {
@@ -115,7 +142,7 @@ void Longest_White_Column() // �����Ѳ��
         }
     }
 
-    // �����ң��������ϣ�����ȫͼ��¼��Χ�ڵ�ÿһ�а׵�����
+    // 统计每列的白色像素数量
     for (j = start_column; j <= end_column; j++)
     {
         for (i = MT9V03X_H - 1; i >= 0; i--)
@@ -127,124 +154,118 @@ void Longest_White_Column() // �����Ѳ��
         }
     }
 
-    // ����������������
+    // 找左侧最长白列
     Longest_White_Column_Left[0] = 0;
     for (i = start_column; i <= end_column; i++)
     {
-        if (Longest_White_Column_Left[0] < White_Column[i]) // �������һ��
+        if (Longest_White_Column_Left[0] < White_Column[i])
         {
-            Longest_White_Column_Left[0] = White_Column[i]; // ��0���ǰ��г���
-            Longest_White_Column_Left[1] = i;               // ��1�����±꣬��i��
-        }
-    }
-    // ���ҵ���������������
-    Longest_White_Column_Right[0] = 0;                           // ��0���ǰ��г���
-    for (i = end_column; i >= Longest_White_Column_Left[1]; i--) // ��������ע���������ҵ���������λ�þͿ���ͣ��
-    {
-        if (Longest_White_Column_Right[0] < White_Column[i]) // �������һ��
-        {
-            Longest_White_Column_Right[0] = White_Column[i]; // ��0���ǰ��г���
-            Longest_White_Column_Right[1] = i;               // ��1�����±꣬��j��
+            Longest_White_Column_Left[0] = White_Column[i];
+            Longest_White_Column_Left[1] = i;
         }
     }
 
-    Search_Stop_Line = (Longest_White_Column_Left[0] > Longest_White_Column_Right[0]) ? Longest_White_Column_Left[0] : Longest_White_Column_Right[0]; // �ǳ���Ҫ��������ֹ�д洢
-
-    for (i = MT9V03X_H - 1; i >= MT9V03X_H - Search_Stop_Line; i--) // ����Ѳ��
+    // 找右侧最长白列
+    Longest_White_Column_Right[0] = 0;
+    for (i = end_column; i >= Longest_White_Column_Left[1]; i--)
     {
-        /*���ұ߽� */
+        if (Longest_White_Column_Right[0] < White_Column[i])
+        {
+            Longest_White_Column_Right[0] = White_Column[i];
+            Longest_White_Column_Right[1] = i;
+        }
+    }
+
+    // 确定搜索停止行（取左右最长白列中的较大值）
+    Search_Stop_Line = (Longest_White_Column_Left[0] > Longest_White_Column_Right[0]) ? Longest_White_Column_Left[0] : Longest_White_Column_Right[0];
+
+    // 从最长白列位置开始，向上扫描边界
+    for (i = MT9V03X_H - 1; i >= MT9V03X_H - Search_Stop_Line; i--)
+    {
+        // 扫描右边界
         for (j = Longest_White_Column_Right[1]; j <= MT9V03X_W - 1 - 2; j++)
         {
-            if (binaryImage[i][j] == IMG_WHITE && binaryImage[i][j + 1] == IMG_BLACK && binaryImage[i][j + 2] == IMG_BLACK) // �׺ںڣ����ұ߽�
+            if (binaryImage[i][j] == IMG_WHITE && binaryImage[i][j + 1] == IMG_BLACK && binaryImage[i][j + 2] == IMG_BLACK)
             {
                 right_border = j;
-                Right_Lost_Flag[i] = 0; // �Ҷ������飬������1����������0
+                Right_Lost_Flag[i] = 0;
                 break;
             }
-            else if (j >= MT9V03X_W - 1 - 2) // û�ҵ��ұ߽磬����Ļ���Ҹ�ֵ���ұ߽�
+            else if (j >= MT9V03X_W - 1 - 2)
             {
                 right_border = j;
-                Right_Lost_Flag[i] = 1; // �Ҷ������飬������1����������0
+                Right_Lost_Flag[i] = 1;
                 break;
             }
         }
-        /*����߽� */
-        for (j = Longest_White_Column_Left[1]; j >= 0 + 2; j--) // �����ɨ��
+
+        // 扫描左边界
+        for (j = Longest_White_Column_Left[1]; j >= 0 + 2; j--)
         {
-            if (binaryImage[i][j] == IMG_WHITE && binaryImage[i][j - 1] == IMG_BLACK && binaryImage[i][j - 2] == IMG_BLACK) // �׺ںڣ�����߽�
+            if (binaryImage[i][j] == IMG_WHITE && binaryImage[i][j - 1] == IMG_BLACK && binaryImage[i][j - 2] == IMG_BLACK)
             {
                 left_border = j;
-                Left_Lost_Flag[i] = 0; // �������飬������1����������0
+                Left_Lost_Flag[i] = 0;
                 break;
             }
             else if (j <= 2)
             {
-                left_border = j;       // �ҵ�ͷ��û�ҵ��ߣ��Ͱ���Ļ�����ҵ����߽�
-                Left_Lost_Flag[i] = 1; // �������飬������1����������0
+                left_border = j;
+                Left_Lost_Flag[i] = 1;
                 break;
             }
         }
-        Left_Line[i] = left_border;   // �����������
-        Right_Line[i] = right_border; // �ұ���������
+        Left_Line[i] = left_border;
+        Right_Line[i] = right_border;
     }
 
-    for (i = MT9V03X_H - 1; i >= 0; i--) // �������ݳ�������
+    // 统计边界丢失次数和边界起始行
+    for (i = MT9V03X_H - 1; i >= 0; i--)
     {
-        if (Left_Lost_Flag[i] == 1) // ���߶�����
+        if (Left_Lost_Flag[i] == 1)
             Left_Lost_Time++;
         if (Right_Lost_Flag[i] == 1)
             Right_Lost_Time++;
-        if (Left_Lost_Flag[i] == 1 && Right_Lost_Flag[i] == 1) // ˫�߶�����
+        if (Left_Lost_Flag[i] == 1 && Right_Lost_Flag[i] == 1)
             Both_Lost_Time++;
-        if (Boundry_Start_Left == 0 && Left_Lost_Flag[i] != 1) // ��¼��һ���Ƕ��ߵ㣬�߽���ʼ��
+        if (Boundry_Start_Left == 0 && Left_Lost_Flag[i] != 1)
             Boundry_Start_Left = i;
         if (Boundry_Start_Right == 0 && Right_Lost_Flag[i] != 1)
             Boundry_Start_Right = i;
         Road_Wide[i] = Right_Line[i] - Left_Line[i];
-        //	printf("%d,%d\r\n",i, Road_Wide[i]);
     }
-
-    // debugʹ�ã���Ļ��ʾ��ز���
-    //    ips200_showint16(0,0, Longest_White_Column_Right[0]);
-    //    ips200_showint16(0,1, Longest_White_Column_Right[1]);
-    //    ips200_showint16(0,2, Longest_White_Column_Left[0]);
-    //    ips200_showint16(0,3, Longest_White_Column_Left[1]);
 }
 
-/*-------------------------------------------------------------------------------------------------------------------
-  @brief     �߽���ʾ������ͼ������ʾ����Ļ�ϣ�
-  @param     null
-  @return    null
-  Sample     ֱ�ӵ���
-  @note      ��ʾ�����ұ߽磬���ߣ�
-                                           ��������²�Ҫ�ã���Ϊֱ����ԭͼ��д���˱߽���Ϣ
-                                           ���Ԫ���ж���ɸ��ŵģ�����ʱ�����
--------------------------------------------------------------------------------------------------------------------*/
+/**
+ * @brief 在二值化图像上显示边界
+ * @note 将左边界、中线、右边界绘制到二值化图像上
+ */
 void Show_Boundry(void)
 {
     int16 i;
-    for (i = MT9V03X_H - 1; i >= MT9V03X_H - Search_Stop_Line; i--) // �����������ɨ��
+    for (i = MT9V03X_H - 1; i >= MT9V03X_H - Search_Stop_Line; i--)
     {
         binaryImage[i][Left_Line[i] + 1] = IMG_BLACK;
         binaryImage[i][(Left_Line[i] + Right_Line[i]) >> 1] = IMG_BLACK;
         binaryImage[i][Right_Line[i] - 1] = IMG_BLACK;
     }
-
-    // ����Ļ�������ߴ���ʾ���ߣ����ڵ�������ͷ
 }
 
-/*-------------------------------------------------------------------------------------------------------------------
-  @brief     ����
-  @param     ���ߵ���㣬�յ�
-  @return    null
-  Sample     Left_Add_Line(int x1,int y1,int x2,int y2);
-  @note      ����ֱ���Ǳ߽磬������ǿ��Ŷȸߵ�,��Ҫ�Ҳ�
--------------------------------------------------------------------------------------------------------------------*/
-void Left_Add_Line(int x1, int y1, int x2, int y2) // ����,�����Ǳ߽�
+/**
+ * @brief 添加左边界线段
+ * @param x1 起点X坐标
+ * @param y1 起点Y坐标
+ * @param x2 终点X坐标
+ * @param y2 终点Y坐标
+ * @note 使用线性插值在两点间连接左边界
+ */
+void Left_Add_Line(int x1, int y1, int x2, int y2)
 {
     int i, max, a1, a2;
     int hx;
-    if (x1 >= MT9V03X_W - 1) // ��ʼ��λ��У�����ų�����Խ��Ŀ���
+
+    // 边界检查
+    if (x1 >= MT9V03X_W - 1)
         x1 = MT9V03X_W - 1;
     else if (x1 <= 0)
         x1 = 0;
@@ -260,15 +281,19 @@ void Left_Add_Line(int x1, int y1, int x2, int y2) // ����,�����
         y2 = MT9V03X_H - 1;
     else if (y2 <= 0)
         y2 = 0;
+
+    // 确保a1 < a2
     a1 = y1;
     a2 = y2;
-    if (a1 > a2) // ���껥��
+    if (a1 > a2)
     {
         max = a1;
         a1 = a2;
         a2 = max;
     }
-    for (i = a1; i <= a2; i++) // ����б�ʲ��߼���
+
+    // 线性插值连接边界
+    for (i = a1; i <= a2; i++)
     {
         hx = (i - y1) * (x2 - x1) / (y2 - y1) + x1;
         if (hx >= MT9V03X_W)
@@ -279,18 +304,21 @@ void Left_Add_Line(int x1, int y1, int x2, int y2) // ����,�����
     }
 }
 
-/*-------------------------------------------------------------------------------------------------------------------
-  @brief     �Ҳ���
-  @param     ���ߵ���㣬�յ�
-  @return    null
-  Sample     Right_Add_Line(int x1,int y1,int x2,int y2);
-  @note      ����ֱ���Ǳ߽磬������ǿ��Ŷȸߵģ���Ҫ�Ҳ�
--------------------------------------------------------------------------------------------------------------------*/
-void Right_Add_Line(int x1, int y1, int x2, int y2) // �Ҳ���,�����Ǳ߽�
+/**
+ * @brief 添加右边界线段
+ * @param x1 起点X坐标
+ * @param y1 起点Y坐标
+ * @param x2 终点X坐标
+ * @param y2 终点Y坐标
+ * @note 使用线性插值在两点间连接右边界
+ */
+void Right_Add_Line(int x1, int y1, int x2, int y2)
 {
     int i, max, a1, a2;
     int hx;
-    if (x1 >= MT9V03X_W - 1) // ��ʼ��λ��У�����ų�����Խ��Ŀ���
+
+    // 边界检查
+    if (x1 >= MT9V03X_W - 1)
         x1 = MT9V03X_W - 1;
     else if (x1 <= 0)
         x1 = 0;
@@ -306,15 +334,19 @@ void Right_Add_Line(int x1, int y1, int x2, int y2) // �Ҳ���,����
         y2 = MT9V03X_H - 1;
     else if (y2 <= 0)
         y2 = 0;
+
+    // 确保a1 < a2
     a1 = y1;
     a2 = y2;
-    if (a1 > a2) // ���껥��
+    if (a1 > a2)
     {
         max = a1;
         a1 = a2;
         a2 = max;
     }
-    for (i = a1; i <= a2; i++) // ����б�ʲ��߼���
+
+    // 线性插值连接边界
+    for (i = a1; i <= a2; i++)
     {
         hx = (i - y1) * (x2 - x1) / (y2 - y1) + x1;
         if (hx >= MT9V03X_W)
@@ -325,46 +357,52 @@ void Right_Add_Line(int x1, int y1, int x2, int y2) // �Ҳ���,����
     }
 }
 
-/*-------------------------------------------------------------------------------------------------------------------
-  @brief     ������������յ㣬��ʮ��ʹ��
-  @param     �����ķ�Χ��㣬�յ�
-  @return    �޸�����ȫ�ֱ���
-             Right_Down_Find=0;
-             Left_Down_Find=0;
-  Sample     Find_Down_Point(int start,int end)
-  @note      ������֮��鿴��Ӧ�ı�����ע�⣬û�ҵ�ʱ��Ӧ��������0
--------------------------------------------------------------------------------------------------------------------*/
+/**
+ * @brief 向下搜索拐点
+ * @param start 起始行
+ * @param end 结束行
+ * @note 检测边界突变点（下拐点），用于十字路口识别
+ */
 void Find_Down_Point(int start, int end)
 {
     int i, t;
     Right_Down_Find = 0;
     Left_Down_Find = 0;
+
+    // 确保start > end
     if (start < end)
     {
         t = start;
         start = end;
         end = t;
     }
-    if (start >= MT9V03X_H - 1 - 5) // ����5�����ݲ��ȶ���������Ϊ�߽�����жϣ�����
+
+    // 边界检查
+    if (start >= MT9V03X_H - 1 - 5)
         start = MT9V03X_H - 1 - 5;
     if (end <= MT9V03X_H - Search_Stop_Line)
         end = MT9V03X_H - Search_Stop_Line;
     if (end <= 5)
         end = 5;
+
+    // 搜索左右下拐点
     for (i = start; i >= end; i--)
     {
-        if (Left_Down_Find == 0 &&                       // ֻ�ҵ�һ�����������ĵ�
-            abs(Left_Line[i] - Left_Line[i + 1]) <= 5 && // �ǵ����ֵ���Ը���
+        // 左下拐点检测：上方平稳，下方向内突变
+        if (Left_Down_Find == 0 &&
+            abs(Left_Line[i] - Left_Line[i + 1]) <= 5 &&
             abs(Left_Line[i + 1] - Left_Line[i + 2]) <= 5 &&
             abs(Left_Line[i + 2] - Left_Line[i + 3]) <= 5 &&
             (Left_Line[i] - Left_Line[i - 2]) >= 8 &&
             (Left_Line[i] - Left_Line[i - 3]) >= 15 &&
             (Left_Line[i] - Left_Line[i - 4]) >= 15)
         {
-            Left_Down_Find = i; // ��ȡ��������
+            Left_Down_Find = i;
         }
-        if (Right_Down_Find == 0 &&                        // ֻ�ҵ�һ�����������ĵ�
-            abs(Right_Line[i] - Right_Line[i + 1]) <= 5 && // �ǵ����ֵ���Ը���
+
+        // 右下拐点检测：上方平稳，下方向内突变
+        if (Right_Down_Find == 0 &&
+            abs(Right_Line[i] - Right_Line[i + 1]) <= 5 &&
             abs(Right_Line[i + 1] - Right_Line[i + 2]) <= 5 &&
             abs(Right_Line[i + 2] - Right_Line[i + 3]) <= 5 &&
             (Right_Line[i] - Right_Line[i - 2]) <= -8 &&
@@ -373,42 +411,47 @@ void Find_Down_Point(int start, int end)
         {
             Right_Down_Find = i;
         }
-        if (Left_Down_Find != 0 && Right_Down_Find != 0) // �����ҵ����˳�
+
+        if (Left_Down_Find != 0 && Right_Down_Find != 0)
         {
             break;
         }
     }
 }
 
-/*-------------------------------------------------------------------------------------------------------------------
-  @brief     ������������յ㣬��ʮ��ʹ��
-  @param     �����ķ�Χ��㣬�յ�
-  @return    �޸�����ȫ�ֱ���
-             Left_Up_Find=0;
-             Right_Up_Find=0;
-  Sample     Find_Up_Point(int start,int end)
-  @note      ������֮��鿴��Ӧ�ı�����ע�⣬û�ҵ�ʱ��Ӧ��������0
--------------------------------------------------------------------------------------------------------------------*/
+/**
+ * @brief 向上搜索拐点
+ * @param start 起始行
+ * @param end 结束行
+ * @note 检测边界突变点（上拐点），用于十字路口识别
+ */
 void Find_Up_Point(int start, int end)
 {
     int i, t;
     Left_Up_Find = 0;
     Right_Up_Find = 0;
+
+    // 确保start > end
     if (start < end)
     {
         t = start;
         start = end;
         end = t;
     }
+
+    // 边界检查
     if (end <= MT9V03X_H - Search_Stop_Line)
         end = MT9V03X_H - Search_Stop_Line;
-    if (end <= 5) // ��ʱ����зǳ�����ҲҪ�������ֵ㣬��ֹ����Խ��
+    if (end <= 5)
         end = 5;
-    if (start >= MT9V03X_H - 1 - 5) // ����5�����ݲ��ȶ���������Ϊ�߽�����жϣ�����
+    if (start >= MT9V03X_H - 1 - 5)
         start = MT9V03X_H - 1 - 5;
+
+    // 搜索左右上拐点
     for (i = start; i >= end; i--)
     {
-        if (Left_Up_Find == 0 && // ֻ�ҵ�һ�����������ĵ�
+        // 左上拐点检测：下方平稳，上方向内突变
+        if (Left_Up_Find == 0 &&
             abs(Left_Line[i] - Left_Line[i - 1]) <= 5 &&
             abs(Left_Line[i - 1] - Left_Line[i - 2]) <= 5 &&
             abs(Left_Line[i - 2] - Left_Line[i - 3]) <= 5 &&
@@ -416,42 +459,48 @@ void Find_Up_Point(int start, int end)
             (Left_Line[i] - Left_Line[i + 3]) >= 15 &&
             (Left_Line[i] - Left_Line[i + 4]) >= 15)
         {
-            Left_Up_Find = i; // ��ȡ��������
+            Left_Up_Find = i;
         }
-        if (Right_Up_Find == 0 &&                          // ֻ�ҵ�һ�����������ĵ�
-            abs(Right_Line[i] - Right_Line[i - 1]) <= 5 && // ��������λ�ò��
+
+        // 右上拐点检测：下方平稳，上方向内突变
+        if (Right_Up_Find == 0 &&
+            abs(Right_Line[i] - Right_Line[i - 1]) <= 5 &&
             abs(Right_Line[i - 1] - Right_Line[i - 2]) <= 5 &&
             abs(Right_Line[i - 2] - Right_Line[i - 3]) <= 5 &&
             (Right_Line[i] - Right_Line[i + 2]) <= -8 &&
             (Right_Line[i] - Right_Line[i + 3]) <= -15 &&
             (Right_Line[i] - Right_Line[i + 4]) <= -15)
         {
-            Right_Up_Find = i; // ��ȡ��������
+            Right_Up_Find = i;
         }
-        if (Left_Up_Find != 0 && Right_Up_Find != 0) // ���������ҵ��ͳ�ȥ
+
+        if (Left_Up_Find != 0 && Right_Up_Find != 0)
         {
             break;
         }
     }
-    if (abs(Right_Up_Find - Left_Up_Find) >= 30) // ����˺�ѹ�����Ϊ����
+
+    // 如果左右上拐点位置差距过大，认为检测无效
+    if (abs(Right_Up_Find - Left_Up_Find) >= 30)
     {
         Right_Up_Find = 0;
         Left_Up_Find = 0;
     }
 }
 
-/*-------------------------------------------------------------------------------------------------------------------
-  @brief     ��߽��ӳ�
-  @param     �ӳ���ʼ�������ӳ���ĳ��
-  @return    null
-  Sample     Stop_Detect(void)
-  @note      ����ʼ��������5���㣬���б�ʣ������ӳ���ֱ��������
--------------------------------------------------------------------------------------------------------------------*/
+/**
+ * @brief 延长左边界
+ * @param start 起始行
+ * @param end 结束行
+ * @note 根据起始点前方的斜率延长边界
+ */
 void Lengthen_Left_Boundry(int start, int end)
 {
     int i, t;
     float k = 0;
-    if (start >= MT9V03X_H - 1) // ��ʼ��λ��У�����ų�����Խ��Ŀ���
+
+    // 边界检查
+    if (start >= MT9V03X_H - 1)
         start = MT9V03X_H - 1;
     else if (start <= 0)
         start = 0;
@@ -459,24 +508,27 @@ void Lengthen_Left_Boundry(int start, int end)
         end = MT9V03X_H - 1;
     else if (end <= 0)
         end = 0;
-    if (end < start) //++���ʣ����껥��
+
+    // 确保end > start
+    if (end < start)
     {
         t = end;
         end = start;
         start = t;
     }
 
-    if (start <= 5) // ��Ϊ��Ҫ�ڿ�ʼ��������5���㣬������ʼ����ڿ��ϣ��������ӳ���ֻ��ֱ������
+    // 如果起始点太靠前，直接连线
+    if (start <= 5)
     {
         Left_Add_Line(Left_Line[start], start, Left_Line[end], end);
     }
-
+    // 否则根据斜率延长
     else
     {
-        k = (float)(Left_Line[start] - Left_Line[start - 4]) / 5.0; // �����k��1/б��
+        k = (float)(Left_Line[start] - Left_Line[start - 4]) / 5.0;
         for (i = start; i <= end; i++)
         {
-            Left_Line[i] = (int)(i - start) * k + Left_Line[start]; //(x=(y-y1)*k+x1),��бʽ����
+            Left_Line[i] = (int)(i - start) * k + Left_Line[start];
             if (Left_Line[i] >= MT9V03X_W - 1)
             {
                 Left_Line[i] = MT9V03X_W - 1;
@@ -489,18 +541,19 @@ void Lengthen_Left_Boundry(int start, int end)
     }
 }
 
-/*-------------------------------------------------------------------------------------------------------------------
-  @brief     ����߽��ӳ�
-  @param     �ӳ���ʼ�������ӳ���ĳ��
-  @return    null
-  Sample     Stop_Detect(void)
-  @note      ����ʼ��������3���㣬���б�ʣ������ӳ���ֱ��������
--------------------------------------------------------------------------------------------------------------------*/
+/**
+ * @brief 延长右边界
+ * @param start 起始行
+ * @param end 结束行
+ * @note 根据起始点前方的斜率延长边界
+ */
 void Lengthen_Right_Boundry(int start, int end)
 {
     int i, t;
     float k = 0;
-    if (start >= MT9V03X_H - 1) // ��ʼ��λ��У�����ų�����Խ��Ŀ���
+
+    // 边界检查
+    if (start >= MT9V03X_H - 1)
         start = MT9V03X_H - 1;
     else if (start <= 0)
         start = 0;
@@ -508,23 +561,27 @@ void Lengthen_Right_Boundry(int start, int end)
         end = MT9V03X_H - 1;
     else if (end <= 0)
         end = 0;
-    if (end < start) //++���ʣ����껥��
+
+    // 确保end > start
+    if (end < start)
     {
         t = end;
         end = start;
         start = t;
     }
 
-    if (start <= 5) // ��Ϊ��Ҫ�ڿ�ʼ��������5���㣬������ʼ����ڿ��ϣ��������ӳ���ֻ��ֱ������
+    // 如果起始点太靠前，直接连线
+    if (start <= 5)
     {
         Right_Add_Line(Right_Line[start], start, Right_Line[end], end);
     }
+    // 否则根据斜率延长
     else
     {
-        k = (float)(Right_Line[start] - Right_Line[start - 4]) / 5.0; // �����k��1/б��
+        k = (float)(Right_Line[start] - Right_Line[start - 4]) / 5.0;
         for (i = start; i <= end; i++)
         {
-            Right_Line[i] = (int)(i - start) * k + Right_Line[start]; //(x=(y-y1)*k+x1),��бʽ����
+            Right_Line[i] = (int)(i - start) * k + Right_Line[start];
             if (Right_Line[i] >= MT9V03X_W - 1)
             {
                 Right_Line[i] = MT9V03X_W - 1;
@@ -537,60 +594,68 @@ void Lengthen_Right_Boundry(int start, int end)
     }
 }
 
-/*-------------------------------------------------------------------------------------------------------------------
-  @brief     ʮ�ּ��
-  @param     null
-  @return    null
-  Sample     Cross_Detect(void);
-  @note      �����ĸ��յ��б����������ĸ��ǵ㣬�����ҵ��յ�ĸ��������Ƿ���
--------------------------------------------------------------------------------------------------------------------*/
-
+/**
+ * @brief 十字路口检测
+ * @note 通过检测上下拐点判断是否为十字路口，并修补边界
+ */
 void Cross_Detect()
 {
-    int down_search_start = 0; // �µ�������ʼ��
+    int down_search_start = 0;
     Cross_Flag = 0;
-    if (Island_State == 0 && Ramp_Flag == 0) // �뻷�����µ����⿪
+
+    // 环岛和坡道状态下不检测十字路口
+    if (Island_State == 0 && Ramp_Flag == 0)
     {
         Left_Up_Find = 0;
         Right_Up_Find = 0;
-        if (Both_Lost_Time >= 10) // ʮ�ֱض���˫�߶��ߣ�����˫�߶��ߵ�������ٿ�ʼ�ҽǵ�
+
+        // 如果双边界丢失较多，尝试搜索上拐点
+        if (Both_Lost_Time >= 10)
         {
             Find_Up_Point(MT9V03X_H - 1, 0);
-            if (Left_Up_Find == 0 && Right_Up_Find == 0) // ֻҪû��ͬʱ�ҵ������ϵ㣬ֱ�ӽ���
+            if (Left_Up_Find == 0 && Right_Up_Find == 0)
             {
                 return;
             }
         }
-        if (Left_Up_Find != 0 && Right_Up_Find != 0) // �ҵ������ϵ㣬���ҵ�ʮ����
+
+        // 如果找到左右上拐点，判定为十字路口
+        if (Left_Up_Find != 0 && Right_Up_Find != 0)
         {
-            Cross_Flag = 1;                                                                  // ��Ӧ��־λ�����ڸ�Ԫ�ػ����
-            down_search_start = Left_Up_Find > Right_Up_Find ? Left_Up_Find : Right_Up_Find; // �������Ϲյ����꿿������Ϊ�µ����������
-            Find_Down_Point(MT9V03X_H - 5, down_search_start + 2);                           // ���Ϲյ���2����Ϊ�µ�Ľ�ֹ��
+            Cross_Flag = 1;
+            down_search_start = Left_Up_Find > Right_Up_Find ? Left_Up_Find : Right_Up_Find;
+
+            // 搜索下拐点
+            Find_Down_Point(MT9V03X_H - 5, down_search_start + 2);
+
+            // 确保下拐点在上拐点下方
             if (Left_Down_Find <= Left_Up_Find)
             {
-                Left_Down_Find = 0; // �µ㲻���ܱ��ϵ㻹����
+                Left_Down_Find = 0;
             }
             if (Right_Down_Find <= Right_Up_Find)
             {
-                Right_Down_Find = 0; // �µ㲻���ܱ��ϵ㻹����
+                Right_Down_Find = 0;
             }
+
+            // 根据找到的拐点情况修补边界
             if (Left_Down_Find != 0 && Right_Down_Find != 0)
-            { // �ĸ��㶼�ڣ��������ߣ����������Ȼ����
+            {
                 Left_Add_Line(Left_Line[Left_Up_Find], Left_Up_Find, Left_Line[Left_Down_Find], Left_Down_Find);
                 Right_Add_Line(Right_Line[Right_Up_Find], Right_Up_Find, Right_Line[Right_Down_Find], Right_Down_Find);
             }
-            else if (Left_Down_Find == 0 && Right_Down_Find != 0) // 11//����ʹ�õĶ���б�ʲ���
-            {                                                     // ������                                     //01
+            else if (Left_Down_Find == 0 && Right_Down_Find != 0)
+            {
                 Lengthen_Left_Boundry(Left_Up_Find - 1, MT9V03X_H - 1);
                 Right_Add_Line(Right_Line[Right_Up_Find], Right_Up_Find, Right_Line[Right_Down_Find], Right_Down_Find);
             }
-            else if (Left_Down_Find != 0 && Right_Down_Find == 0) // 11
-            {                                                     // ������                                     //10
+            else if (Left_Down_Find != 0 && Right_Down_Find == 0)
+            {
                 Left_Add_Line(Left_Line[Left_Up_Find], Left_Up_Find, Left_Line[Left_Down_Find], Left_Down_Find);
                 Lengthen_Right_Boundry(Right_Up_Find - 1, MT9V03X_H - 1);
             }
-            else if (Left_Down_Find == 0 && Right_Down_Find == 0) // 11
-            {                                                     // �����ϵ�                                   //00
+            else if (Left_Down_Find == 0 && Right_Down_Find == 0)
+            {
                 Lengthen_Left_Boundry(Left_Up_Find - 1, MT9V03X_H - 1);
                 Lengthen_Right_Boundry(Right_Up_Find - 1, MT9V03X_H - 1);
             }
@@ -600,29 +665,23 @@ void Cross_Detect()
             Cross_Flag = 0;
         }
     }
-    // �ǵ���ر�����debugʹ��
-    // ips200_showuint8(0,12,Cross_Flag);
-    //    ips200_showuint8(0,13,Island_State);
-    //    ips200_showuint8(50,12,Left_Up_Find);
-    //    ips200_showuint8(100,12,Right_Up_Find);
-    //    ips200_showuint8(50,13,Left_Down_Find);
-    //    ips200_showuint8(100,13,Right_Down_Find);
 }
 
-/*-------------------------------------------------------------------------------------------------------------------
-  @brief     ����
-  @param     ������ʼ�㣬�յ����꣬��һ������Ϊ2�ĺ���
-  @return    null
-  Sample     Draw_Line(0, 0,MT9V03X_W-1,MT9V03X_H-1);
-             Draw_Line(MT9V03X_W-1, 0,0,MT9V03X_H-1);
-                                    ��һ�����
-  @note     ���ľ���һ���ߣ���Ҫ����ɨ��
--------------------------------------------------------------------------------------------------------------------*/
+/**
+ * @brief 绘制直线到二值化图像上
+ * @param startX 起点X坐标
+ * @param startY 起点Y坐标
+ * @param endX 终点X坐标
+ * @param endY 终点Y坐标
+ * @note 用于在图像上绘制辅助线
+ */
 void Draw_Line(int startX, int startY, int endX, int endY)
 {
     int i, x, y;
     int start = 0, end = 0;
-    if (startX >= MT9V03X_W - 1) // �޷�����
+
+    // 边界检查
+    if (startX >= MT9V03X_W - 1)
         startX = MT9V03X_W - 1;
     else if (startX <= 0)
         startX = 0;
@@ -639,9 +698,10 @@ void Draw_Line(int startX, int startY, int endX, int endY)
     else if (endY <= 0)
         endY = 0;
 
-    if (startX == endX) // һ������
+    // 竖直线
+    if (startX == endX)
     {
-        if (startY > endY) // ����
+        if (startY > endY)
         {
             start = endY;
             end = startY;
@@ -654,10 +714,10 @@ void Draw_Line(int startX, int startY, int endX, int endY)
             binaryImage[i - 1][startX] = IMG_BLACK;
         }
     }
-
-    else if (startY == endY) // ��һ������
+    // 水平线
+    else if (startY == endY)
     {
-        if (startX > endX) // ����
+        if (startX > endX)
         {
             start = endX;
             end = startX;
@@ -670,9 +730,11 @@ void Draw_Line(int startX, int startY, int endX, int endY)
             binaryImage[startY - 1][i] = IMG_BLACK;
         }
     }
-    else // ����������ˮƽ����ֱ��������������ǳ������
+    // 斜线
+    else
     {
-        if (startY > endY) // ��ʼ�����
+        // 按Y方向绘制
+        if (startY > endY)
         {
             start = endY;
             end = startY;
@@ -682,9 +744,9 @@ void Draw_Line(int startX, int startY, int endX, int endY)
             start = startY;
             end = endY;
         }
-        for (i = start; i <= end; i++) // �����ߣ���֤ÿһ�ж��кڵ�
+        for (i = start; i <= end; i++)
         {
-            x = (int)(startX + (endX - startX) * (i - startY) / (endY - startY)); // ����ʽ����
+            x = (int)(startX + (endX - startX) * (i - startY) / (endY - startY));
             if (x >= MT9V03X_W - 1)
                 x = MT9V03X_W - 1;
             else if (x <= 1)
@@ -692,6 +754,8 @@ void Draw_Line(int startX, int startY, int endX, int endY)
             binaryImage[i][x] = IMG_BLACK;
             binaryImage[i][x - 1] = IMG_BLACK;
         }
+
+        // 按X方向绘制
         if (startX > endX)
         {
             start = endX;
@@ -702,10 +766,9 @@ void Draw_Line(int startX, int startY, int endX, int endY)
             start = startX;
             end = endX;
         }
-        for (i = start; i <= end; i++) // �����ߣ���֤ÿһ�ж��кڵ�
+        for (i = start; i <= end; i++)
         {
-
-            y = (int)(startY + (endY - startY) * (i - startX) / (endX - startX)); // ����ʽ����
+            y = (int)(startY + (endY - startY) * (i - startX) / (endX - startX));
             if (y >= MT9V03X_H - 1)
                 y = MT9V03X_H - 1;
             else if (y <= 0)
@@ -715,29 +778,34 @@ void Draw_Line(int startX, int startY, int endX, int endY)
     }
 }
 
-/*-------------------------------------------------------------------------------------------------------------------
-  @brief     �������ж�
-  @param     null
-  @return    ��⵽�����߷���1�����򷵻�0
-  Sample     Zebra_Detect();
-  @note
--------------------------------------------------------------------------------------------------------------------*/
+/**
+ * @brief 斑马线检测
+ * @return 检测结果（0=无斑马线，1=有斑马线）
+ * @note 通过统计图像底部白黑跳变次数判断是否为斑马线
+ */
 int Zebra_Detect(void)
 {
     uint8 zebra_count = 0;
+
+    // 检测条件：最长白列在合理范围内，且搜索停止行足够高
     if (Longest_White_Column_Left[1] > 20 && Longest_White_Column_Left[1] < IMAGE_WIDTH - 20 &&
         Longest_White_Column_Right[1] > 20 && Longest_White_Column_Right[1] < IMAGE_WIDTH - 20 &&
-        Search_Stop_Line >= 110)                                   // �����������ƣ�����ѭ������
-        for (int i = IMAGE_HEIGHT - 1; i >= IMAGE_HEIGHT - 3; i--) // ȡ���м���
+        Search_Stop_Line >= 110)
+
+        // 扫描图像底部几行
+        for (int i = IMAGE_HEIGHT - 1; i >= IMAGE_HEIGHT - 3; i--)
         {
-            for (int j = 20; j <= IMAGE_WIDTH - 1 - 20; j++) // ��ⷶΧ������20��֮��
+            for (int j = 20; j <= IMAGE_WIDTH - 1 - 20; j++)
             {
+                // 统计白黑跳变次数
                 if (binaryImage[i][j] == IMG_WHITE && binaryImage[i][j + 1] == IMG_BLACK && binaryImage[i][j + 2] == IMG_BLACK)
                 {
                     zebra_count++;
                 }
             }
-            if (zebra_count >= 10) // �����ɫ�������ڵ���10����Ϊ�ǰ�����
+
+            // 跳变次数超过阈值，判定为斑马线
+            if (zebra_count >= 10)
             {
                 return 1;
             }
@@ -746,73 +814,64 @@ int Zebra_Detect(void)
     return 0;
 }
 
-/*-------------------------------------------------------------------------------------------------------------------
-  @brief     �µ��ж�
-  @param     null
-  @return
-  Sample
-  @note
--------------------------------------------------------------------------------------------------------------------*/
-int Ramp_offset;
+/**
+ * @brief 坡道检测
+ * @note 通过赛道宽度变化和编码器变化判断坡道状态
+ */
 void Ramp_Detect(void)
 {
     static int Encoder_Sum_Last, Encoder_Sum;
     int i = 0;
     int count = 0;
-    // ��ʮ�֡������Ļ���
+
+    // 十字路口或环岛状态下不检测坡道
     if (Cross_Flag != 0 || Island_State != 0)
     {
         return;
     }
 
-    if (Search_Stop_Line >= 66) // ��ֹ�г���������ʱ������
+    // 检测赛道宽度是否超过标准宽度（坡道特征）
+    if (Search_Stop_Line >= 66)
     {
-        // ��ͼ��ײ����ϱ���������ֹ�з�Χ�ڵ���
         for (i = MT9V03X_H - 1; i > MT9V03X_H - Search_Stop_Line; i--)
         {
-
-            if (Road_Wide[i] > Road_Standard_Wide[i] + Ramp_offset) // �������ȳ�����׼����+10
+            if (Road_Wide[i] > Road_Standard_Wide[i] + Ramp_offset)
             {
-                count++; // �ۼƳ�������
+                count++;
             }
         }
     }
 
-    if (count >= 10) // �����������ﵽ��ֵ
+    // 如果宽度异常行数超过阈值，进入坡道检测状态机
+    if (count >= 10)
     {
-        // buzzer_on(50);
         Ramp_Flag = 1;
         int err;
         Encoder_Sum = Encoder_Left + Encoder_Left;
         err = Encoder_Sum - Encoder_Sum_Last;
         Encoder_Sum_Last = Encoder_Sum;
-        if (Ramp_Flag == 1) // ��ʼ״̬�������µ�ǰ
+
+        // 状态1：检测上坡（编码器突然减小）
+        if (Ramp_Flag == 1)
         {
-
-            /*�µ�ǰ�ĵ��� */
-
-            if (err < -100) // ���������µ��ϵ�����
+            if (err < -100)
             {
-                // buzzer_on(50);
                 Ramp_Flag = 2;
             }
         }
+        // 状态2：检测下坡（编码器突然增大）
         else if (Ramp_Flag == 2)
         {
-            /*�µ���*/
-            if (err > 100) // ��ʼ����
+            if (err > 100)
             {
-                // buzzer_on(50);
                 Ramp_Flag = 3;
             }
         }
-        else if (Ramp_Flag == 3) // ��������״̬
+        // 状态3：等待通过坡道
+        else if (Ramp_Flag == 3)
         {
-            /*���µĵ���*/
-
-            if (encoder_sum > 30000) // ����µ�������
+            if (encoder_sum > 30000)
             {
-                // buzzer_on(50);
                 Ramp_Flag = 0;
             }
         }
@@ -821,21 +880,18 @@ void Ramp_Detect(void)
     {
         Ramp_Flag = 0;
     }
-
-    // �����ã���ʾ�����м���������Ŀ��������ʾ������
-    // ips200_showuint8(50, 10*16, count, 5);
 }
 
 /**
- *
- * @brief  ����ĳ���е�ƽ�����
- * @param  start_point
- * @param  end_point
- * @retval err ���ֵ
- **/
+ * @brief 计算图像中线偏差的平均值
+ * @param start_point 起始行（从图像底部算起）
+ * @param end_point 结束行
+ * @return 中线偏差平均值（正值表示偏右，负值表示偏左）
+ * @note 用于转向PID控制的P环输入
+ */
 float err_sum_average(uint8 start_point, uint8 end_point)
 {
-    // ��ֹ�����������
+    // 确保start_point < end_point
     if (end_point < start_point)
     {
         uint8 t = end_point;
@@ -843,31 +899,39 @@ float err_sum_average(uint8 start_point, uint8 end_point)
         start_point = t;
     }
 
+    // 边界检查
     if (start_point < MT9V03X_H - Search_Stop_Line)
-        start_point = MT9V03X_H - Search_Stop_Line - 1; // ��ֹ���Խ��
+        start_point = MT9V03X_H - Search_Stop_Line - 1;
     if (end_point < MT9V03X_H - Search_Stop_Line)
-        end_point = MT9V03X_H - Search_Stop_Line - 2; // ��ֹ�յ�Խ��
+        end_point = MT9V03X_H - Search_Stop_Line - 2;
 
+    // 计算偏差累加值
     float err = 0;
     for (int i = start_point; i <= end_point; i++)
     {
-        err += (MT9V03X_W / 2 - ((Left_Line[i] + Right_Line[i]) >> 1)); // λ������Ч����2
+        err += (MT9V03X_W / 2 - ((Left_Line[i] + Right_Line[i]) >> 1));
     }
+
+    // 计算平均偏差
     err = err / (end_point - start_point + 1);
     return err;
 }
 
 /**
- * @brief   �����ж�,ѡȡͼ��ײ��м�10*2��������ж�
- * @param   *binaryImage[IMAGE_HEIGHT][IMAGE_WIDTH]  ԭʼͼ��
- * @retval   0:���� 1:����
+ * @brief 检测图像是否出界
+ * @param binaryImage 二值化图像数组
+ * @return 出界标志（0=未出界，1=出界）
+ * @note 通过检测图像底部中央区域的平均灰度判断
  */
 uint8 image_out_of_bounds(uint8 binaryImage[IMAGE_HEIGHT][IMAGE_WIDTH])
 {
+    // 如果检测到斑马线，不判定为出界
     if (Zebra_Detect())
     {
         return 0;
     }
+
+    // 统计图像底部中央区域的灰度值
     int sum = 0;
     for (int i = 0; i < 10; i++)
     {
@@ -876,7 +940,11 @@ uint8 image_out_of_bounds(uint8 binaryImage[IMAGE_HEIGHT][IMAGE_WIDTH])
             sum += image_copy[IMAGE_HEIGHT - 1 - j][IMAGE_WIDTH / 2 - 5 + i];
         }
     }
-    int average = sum / 20; // ����ƽ��ֵ
+
+    // 计算平均灰度值
+    int average = sum / 20;
+
+    // 如果平均灰度较低（较黑），判定为出界
     if (average < 110)
     {
         return 1;
@@ -887,23 +955,25 @@ uint8 image_out_of_bounds(uint8 binaryImage[IMAGE_HEIGHT][IMAGE_WIDTH])
     }
 }
 
-/*-------------------------------------------------------------------------------------------------------------------
-  @brief     总图像处理函数（主循环调用）
-  @param     void
-  @return    void
-  Sample     image_process();
-  @note      在Cargo模式下每帧调用，进行边界提取和元素识别
-             需要先进行图像二值化处理后再调用此函数
--------------------------------------------------------------------------------------------------------------------*/
+/**
+ * @brief 图像处理主函数
+ * @note 集成边界提取和元素识别的主函数
+ *       包括：图像复制、大津法二值化、边界搜索、元素检测等
+ */
 void image_process(void)
 {
+    // 0. 复制图像数据并进行大津法二值化
+    memcpy(image_copy, mt9v03x_image, MT9V03X_H * MT9V03X_W);
+    threshold = otsu_get_threshold((uint8 *)image_copy, MT9V03X_W, MT9V03X_H);
+    applyThreshold(image_copy, binaryImage, threshold);
+
     // 1. 双边巡线 - 提取左右边界
     Longest_White_Column();
 
-    // 2. 元素检测
-    Cross_Detect(); // 十字检测
-    Ramp_Detect();  // 坡道检测
+    // 2. 赛道元素检测
+    Cross_Detect();  // 十字路口检测
+    Ramp_Detect();   // 坡道检测
 
-    // 3. 显示边界线（可选，调试时启用）
-    // Show_Boundry();
+    // 3. 设置图像处理完成标志
+    image_proess = 1;
 }

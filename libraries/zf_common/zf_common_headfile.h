@@ -119,13 +119,18 @@
 
 //=====================================================�û���======================================================
 #include "buzzer.h"     // 蜂鸣器控制库
-#include "menu.h"  // �Ѵ������ݲ㣬�ض���menu_clean.h
-#include "motor.h"
-#include "imu.h"
-#include "pid.h"
-#include "servo.h"
-#include "param_save.h"  // Flash�����Զ�����
+#include "delayed_stop.h" // 延迟停车功能
+#include "Image Binarization.h" // 图像二值化
+#include "image.h"      // 图像处理
+#include "imu.h"        // IMU 传感器
+#include "menu_config.h" // 用户菜单配置
+#include "menu.h"     // 菜单系统内核  
+#include "motor.h"  // 电机驱动与控制
+#include "param_save.h"  // 参数保存与读取
+#include "pid.h"    // PID 控制器
+#include "servo.h"      // 舵机控制
 #include "turn_compensation.h"  // 转弯补偿控制器
+
 
 //=====================================================�û���======================================================
 

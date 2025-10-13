@@ -3,14 +3,14 @@
 #include "zf_common_headfile.h"
 #include "zf_common_typedef.h"
 
-// Í¼Ïñ³ß´ç¶¨Òå£¨¸ù¾İÊµ¼ÊÉãÏñÍ··Ö±æÂÊĞŞ¸Ä£©
+// å›¾åƒå°ºå¯¸å®šä¹‰ï¼ˆæ ¹æ®å®é™…æ‘„åƒå¤´åˆ†è¾¨ç‡ä¿®æ”¹ï¼‰
 #define IMAGE_HEIGHT MT9V03X_H
 #define IMAGE_WIDTH MT9V03X_W
 
-extern uint8 binaryImage[IMAGE_HEIGHT][IMAGE_WIDTH];      // ×îÖÕÊä³ö½á¹ûµÄÊı×é
-extern uint8 boundary_image[IMAGE_HEIGHT][IMAGE_WIDTH];   // ±ß½çÍ¼Ïñ
-extern uint8 centerline_image[IMAGE_HEIGHT][IMAGE_WIDTH]; // ÖĞĞÄÏßÍ¼Ïñ
-extern int center_points[IMAGE_HEIGHT];                   // ´æ´¢Ã¿ĞĞµÄÖĞĞÄµã×ø±ê
+extern uint8 binaryImage[IMAGE_HEIGHT][IMAGE_WIDTH];      // æœ€ç»ˆè¾“å‡ºç»“æœçš„æ•°ç»„
+extern uint8 boundary_image[IMAGE_HEIGHT][IMAGE_WIDTH];   // è¾¹ç•Œå›¾åƒ
+extern uint8 centerline_image[IMAGE_HEIGHT][IMAGE_WIDTH]; // ä¸­å¿ƒçº¿å›¾åƒ
+extern int center_points[IMAGE_HEIGHT];                   // å­˜å‚¨æ¯è¡Œçš„ä¸­å¿ƒç‚¹åæ ‡
 
 int otsu_get_threshold(uint8 *image, uint16 col, uint16 row);
 

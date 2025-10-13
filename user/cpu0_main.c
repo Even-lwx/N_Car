@@ -70,23 +70,29 @@ int core0_main(void)
     {
         if (enable)
         {
-            // Cargo 模式运行中，停止菜单刷新
-            // 图像处理（在主循环中执行，避免占用中断时间）
-            image_process();
+            if (mt9v03x_finish_flag)
+            {
+                // Cargo 模式运行中，停止菜单刷新
+                // 图像处理（在主循环中执行，避免占用中断时间）
+                image_process();
 
-            // 转向PID控制（基于图像偏差和陀螺仪gz）
-            steer_pid_control();
+                // 转向PID控制（基于图像偏差和陀螺仪gz）
+                steer_pid_control();
 
-            // 例如：实时显示调试信息
-            // printf("%f,%d,%f\r\n", imu_data.pitch, imu_data.gyro_y, filtered_motor_output);
-            printf("%f,%d\r\n", drive_pwm_output, encoder[1]);
-            // 检测退出（BACK键由20ms中断处理，这里只需要检查enable状态）
+                // 例如：实时显示调试信息
+                // printf("%f,%d,%f\r\n", imu_data.pitch, imu_data.gyro_y, filtered_motor_output);
+                // printf("%f,%d\r\n", drive_pwm_output, encoder[1]);
+                // 检测退出（BACK键由20ms中断处理，这里只需要检查enable状态）
+
+                // 清除图像采集完成标志，允许处理下一帧
+                mt9v03x_finish_flag = 0;
+            }
         }
         else
         {
             // 正常菜单模式
             menu_update();
-            //printf("%f,%d\r\n", imu_data.pitch, imu_data.gyro_y);
+            // printf("%f,%d\r\n", imu_data.pitch, imu_data.gyro_y);
         }
 
         // 减少CPU占用

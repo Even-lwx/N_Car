@@ -1,9 +1,6 @@
 #include "pid.h"
-#include "delayed_stop.h"
-#include "turn_compensation.h"
-#include "servo.h"
-#include "image.h"
 #include "zf_common_headfile.h"
+
 
 // *************************** 宏定义 ***************************
 
@@ -50,15 +47,14 @@ PID_Controller steer_pid = {
     .ki = 0.0f,
     .kd = 0.0f,
     .max_integral = 0.0f,
-    .max_output = 0.0f
-};
+    .max_output = 0.0f};
 
 // 转向PID参数
-float steer_kp = 0.5f;             // 转向P系数（基于图像偏差）
-float steer_kd = 0.01f;            // 转向D系数（基于陀螺仪gz）
-float steer_output_limit = 30.0f;  // 转向输出限幅（舵机角度限制）
-uint8 steer_sample_start = 100;    // 图像采样起始行（从底部算起，越大越近）
-uint8 steer_sample_end = 110;      // 图像采样结束行
+float steer_kp = 0.5f;            // 转向P系数（基于图像偏差）
+float steer_kd = 0.01f;           // 转向D系数（基于陀螺仪gz）
+float steer_output_limit = 30.0f; // 转向输出限幅（舵机角度限制）
+uint32 steer_sample_start = 50;   // 图像采样起始行（从底部算起，越大越近）
+uint32 steer_sample_end = 60;     // 图像采样结束行
 
 // 目标值
 float target_gyro_rate = 0.0f;    // 目标角速度
@@ -70,9 +66,10 @@ float target_drive_speed = 10.0f; // 行进轮目标速度
 volatile bool enable = false; // 使能标志，默认禁用（需在Cargo模式中启用）
 
 // 控制变量
-static uint32_t count = 0;             // 控制计数器
-static float desired_angle = 0.0f;     // 期望角度（速度环输出）
-static float angle_gyro_target = 0.0f; // 目标角速度（角度环输出）
+static uint32_t count = 0;                // 控制计数器
+static float desired_angle = 0.0f;        // 期望角度（速度环输出）
+static float angle_gyro_target = 0.0f;    // 目标角速度（角度环输出）
+static float current_servo_angle = 90.0f; // 当前实际舵机角度（由转向PID更新）
 
 // 一阶低通滤波器相关变量（仅对PID输出滤波）
 float output_filter_coeff = 0.6f;   // 输出滤波系数 (0-1)，降低以增强平滑度
@@ -142,8 +139,7 @@ void gyro_loop_control(int angle_control)
  */
 void angle_loop_control(int speed_control)
 {
-    // 计算转弯补偿角度
-    float current_servo_angle = servo_get_angle();
+    // 计算转弯补偿角度（使用实际舵机角度）
     float current_speed = (float)encoder[1];
     float turn_compensation = turn_compensation_calculate(current_servo_angle, current_speed);
 
@@ -237,16 +233,14 @@ void control(void)
         drive_speed_loop_control();
     }
 
-    // 转向PID控制（20ms周期，与图像处理同步）
-    // 注意：转向控制需要在主循环中调用，因为需要最新的图像数据
-    // 这里只是预留接口，实际调用在主循环的image_process()之后
+    // 转向PID控制在主循环中调用（需要最新的图像数据）
+    // 不在中断中调用，避免阻塞中断和重复调用
 
     // 防止计数器溢出
     if (count >= 1000)
     {
         count = 0;
     }
-
 }
 
 /**
@@ -447,7 +441,7 @@ float get_angle_protection(void)
 void steer_pid_control(void)
 {
     // 1. 计算图像中线偏差（P环）
-    float image_error = err_sum_average(steer_sample_start, steer_sample_end);
+    float image_error = err_sum_average((uint8)steer_sample_start, (uint8)steer_sample_end);
 
     // 2. 获取陀螺仪gz（Z轴角速度，偏航角速度）作为D环
     float gyro_gz = (float)imu_data.gyro_z;
@@ -458,9 +452,11 @@ void steer_pid_control(void)
     // 4. 输出限幅
     steer_output = constrain(steer_output, -steer_output_limit, steer_output_limit);
 
-    // 5. 输出到舵机（加上舵机中心角度）
-    float servo_angle = servo_center_angle + steer_output;
-    servo_set_angle(servo_angle);
+    // 5. 计算实际舵机角度并更新全局变量（用于转弯补偿）
+    current_servo_angle = servo_center_angle + steer_output;
+
+    // 6. 输出到舵机
+    servo_set_angle(current_servo_angle);
 }
 
 /**
@@ -475,4 +471,3 @@ void set_steer_pid_params(float kp, float kd, float limit)
     steer_kd = kd;
     steer_output_limit = limit;
 }
-

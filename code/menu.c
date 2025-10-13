@@ -6,13 +6,8 @@
  ********************************************************************/
 
 #include "menu.h"
-#include "menu_config.h"
 #include "zf_common_headfile.h"
-#include "pid.h"
-#include "imu.h"
-#include "motor.h"
-#include "servo.h"
-#include "param_save.h"
+
 /**************** 函数声明 ****************/
 void ips_clear(void);
 void show_string(uint16 x, uint16 y, const char *str);
@@ -173,6 +168,7 @@ void Menu_Back(void)
         if (Now_Menu->back != NULL)
         {
             Now_Menu = Now_Menu->back;
+            Now_Menu->scroll_offset = 0;  // 重置滚动偏移量，避免显示错乱
 
             ips_clear();
             need_refresh = 1;
@@ -186,7 +182,7 @@ void Menu_Back(void)
                 // 将光标移动到第0项（Cargo）
                 Now_Menu->order = 0;
                 Now_Menu->scroll_offset = 0;
-                need_refresh = 1; // 需要刷新屏幕以更新滚动显示
+                // 不需要刷新整个屏幕，光标位置自动更新
             }
         }
     }
@@ -218,6 +214,8 @@ void Menu_Back(void)
         if (Now_Menu->back != NULL)
         {
             Now_Menu = Now_Menu->back;
+            Now_Menu->order = 0;          // 重置光标到第一项
+            Now_Menu->scroll_offset = 0;  // 重置滚动偏移量
 
             ips_clear();
             need_refresh = 1;
