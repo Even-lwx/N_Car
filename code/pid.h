@@ -65,11 +65,12 @@ extern float angle_gain_scale; // 角度环死区增益缩放
 extern float gyro_gain_scale;  // 角速度环死区增益缩放
 
 // 转向PID参数
-extern float steer_kp;           // 转向P系数（基于图像偏差）
-extern float steer_kd;           // 转向D系数（基于陀螺仪gz）
-extern float steer_output_limit; // 转向输出限幅
+extern float steer_kp;            // 转向P系数（基于图像偏差）
+extern float steer_kd;            // 转向D系数（基于陀螺仪gz）
+extern float steer_output_limit;  // 转向输出限幅
 extern uint32 steer_sample_start; // 图像采样起始行
 extern uint32 steer_sample_end;   // 图像采样结束行
+extern uint32 steer_enable;       // 转向环使能（0=禁用，1=启用）
 
 // 输出平滑参数（导出到菜单）
 extern float output_filter_coeff; // 输出滤波系数

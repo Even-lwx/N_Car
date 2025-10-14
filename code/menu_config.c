@@ -270,16 +270,18 @@ Page page_pid = {
 };
 
 //============================================================
-// 4. 转弯补偿参数菜单 - Turn Compensation
+// 4. 转弯补偿参数菜单 - Turn Compensation (动态零点补偿)
 //============================================================
-float comp_k_angle_step[] = {0.0001f, 0.001f, 0.01f, 0.1f};
-float comp_k_speed_step[] = {0.01f, 0.1f, 1.0f};
-float comp_max_step[] = {0.5f, 1.0f, 2.0f};
-float servo_center_step[] = {0.1f, 1.0f, 5.0f};
+float comp_deadzone_step[] = {0.01f, 0.1f, 0.5f};       // 死区阈值步进（度）
+float comp_gain_step[] = {0.01f, 0.1f, 0.5f, 1.0f};    // 动态补偿增益步进
+float comp_max_step[] = {0.5f, 1.0f, 2.0f};             // 最大补偿限制步进
+float servo_center_step[] = {0.1f, 1.0f, 5.0f};         // 舵机中点角度步进
+float image_error_threshold_step[] = {0.5f, 1.0f, 5.0f}; // 图像误差阈值步进
 
 CustomData turn_comp_data[] = {
-    {&turn_comp_k_servo, data_float_show, "K_Servo", comp_k_angle_step, 4, 0, 2, 4},
-    {&turn_comp_k_speed, data_float_show, "K_Speed", comp_k_speed_step, 3, 0, 2, 4},
+    {&turn_comp_k_speed, data_float_show, "Gain", comp_gain_step, 4, 0, 3, 2},
+    {&turn_comp_k_servo, data_float_show, "Deadzone", comp_deadzone_step, 3, 0, 2, 2},
+    {&turn_comp_image_threshold, data_float_show, "Img Err Thres", image_error_threshold_step, 3, 0, 3, 1},
     {&turn_comp_max, data_float_show, "Max Comp", comp_max_step, 3, 0, 3, 1},
     {&servo_center_angle, data_float_show, "Servo Center", servo_center_step, 3, 0, 3, 1},
 };
@@ -287,7 +289,7 @@ CustomData turn_comp_data[] = {
 Page page_turn_comp = {
     .name = "Turn Compensation",
     .data = turn_comp_data,
-    .len = 4,
+    .len = 5,
     .stage = Menu,
     .back = NULL, // 在 Menu_Config_Init() 中设置
     .enter = {NULL},
@@ -299,12 +301,14 @@ Page page_turn_comp = {
 //============================================================
 // 4.2 转向PID参数菜单 - Steering PID (Image Error P + Gyro Gz D)
 //============================================================
+uint32 steer_enable_step[] = {1};                   // 转向环开关步进值（0/1切换）
 float steer_kp_step[] = {0.01f, 0.1f, 1.0f, 5.0f};
 float steer_kd_step[] = {0.001f, 0.01f, 0.1f};
 float steer_limit_step[] = {1.0f, 5.0f, 10.0f};
 uint32 sample_row_step[] = {1, 5, 10};
 
 CustomData steer_pid_data[] = {
+    {&steer_enable, data_uint32_show, "Enable (0/1)", steer_enable_step, 1, 0, 1, 0},
     {&steer_kp, data_float_show, "Kp (Image)", steer_kp_step, 4, 0, 3, 2},
     {&steer_kd, data_float_show, "Kd (Gyro Gz)", steer_kd_step, 3, 0, 3, 3},
     {&steer_output_limit, data_float_show, "Output Limit", steer_limit_step, 3, 0, 4, 1},
@@ -315,7 +319,7 @@ CustomData steer_pid_data[] = {
 Page page_steer_pid = {
     .name = "Steer PID",
     .data = steer_pid_data,
-    .len = 5,
+    .len = 6,
     .stage = Menu,
     .back = NULL, // 在 Menu_Config_Init() 中设置
     .enter = {NULL},
