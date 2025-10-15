@@ -10,13 +10,15 @@
 
 #include "turn_compensation.h"
 #include "zf_common_headfile.h"
-#include <math.h>
+
 
 // *************************** 全局变量定义 ***************************
-float turn_comp_k_servo = 0.1f;   // 舵机补偿系数（补偿重心偏移，默认0.1，建议范围: 0.01 ~ 1.0）
-float turn_comp_k_speed = 0.01f;  // 速度补偿系数（补偿离心力，默认0.01，建议范围: 0.001 ~ 0.1）
-float turn_comp_max = 8.0f;       // 最大补偿角度限制（±8度）
-float servo_center_angle = 90.0f; // 舵机中点角度（默认90度）
+float turn_comp_k_servo = 0.7f;            // 死区阈值（补偿绝对值小于此值时视为0，默认0.7度）
+float turn_comp_k_speed = 1.0f;            // 动态补偿增益（默认1.0，建议范围: 0.1 ~ 10.0）
+float turn_comp_k_error = 1.0f;            // 图像误差系数（与err值成线性关系，默认1.0）
+float turn_comp_max = 8.0f;                // 最大补偿角度限制（±8度）
+float servo_center_angle = 90.0f;          // 舵机中点角度（默认90度）
+float turn_comp_image_threshold = 5.0f;    // 图像误差阈值（误差小于此值时不补偿，默认5.0）
 
 // *************************** 内部变量 ***************************
 static float current_compensation = 0.0f; // 当前补偿值（用于调试）
@@ -38,62 +40,57 @@ void turn_compensation_init(void)
 }
 
 //-------------------------------------------------------------------------------------------------------------------
-// 函数简介     计算转弯补偿角度（分离式补偿算法）
+// 函数简介     计算转弯补偿角度（动态零点补偿算法）
 // 参数说明     servo_angle: 当前舵机角度（度）
 //              speed: 当前速度（编码器反馈值）
+//              image_error: 图像中线偏差（用于判断是否需要补偿）
 // 返回参数     float: 补偿角度（度）
-// 使用示例     float compensation = turn_compensation_calculate(servo_angle, encoder[1]);
-// 备注信息     物理意义：
-//              1. 舵机补偿：舵机偏转导致的静态重心偏移（与速度无关）
-//              2. 速度补偿：转向产生的离心力（只与速度和转向方向有关）
-//              算法优势：分离设计避免了舵机偏差误差在高速时被放大
-//              补偿公式：
-//              - 舵机补偿 = K_servo × servo_deviation
-//              - 速度补偿 = K_speed × speed² × sign(servo_deviation)
-//              - 总补偿 = 舵机补偿 + 速度补偿
+// 使用示例     float compensation = turn_compensation_calculate(servo_angle, encoder[1], image_error);
+// 备注信息     补偿公式：
+//              error_coeff = turn_comp_k_error × |image_error| / 100
+//              dynamic_zero = (servo_angle - servo_center) × speed × gain × error_coeff / 10
+//              然后限幅到 [-turn_comp_max, +turn_comp_max]
+//              如果 |image_error| < image_error_threshold，则补偿为0（直行不补偿）
+//              如果补偿绝对值 < deadzone，则补偿为0（死区处理）
 //              正值表示需要向左倾斜补偿，负值表示向右倾斜补偿
 //-------------------------------------------------------------------------------------------------------------------
-float turn_compensation_calculate(float servo_angle, float speed)
+float turn_compensation_calculate(float servo_angle, float speed, float image_error)
 {
-    // 1. 计算舵机偏离中点的角度
-    float servo_deviation = servo_angle - servo_center_angle;
-
-    // 2. 舵机补偿：只补偿舵机偏转导致的静态重心偏移
-    //    即使速度为0，舵机偏转也会造成重心偏移
-    float servo_compensation = turn_comp_k_servo * servo_deviation;
-
-    // 3. 速度补偿：只补偿高速转向时的离心力
-    //    关键：只取转向方向（正负），不取舵机偏差的具体数值
-    //    这样避免了舵机偏差误差在高速时被放大
-    float turn_direction = 0.0f;
-    if (servo_deviation > 0.5f)        // 向右转
-        turn_direction = 1.0f;
-    else if (servo_deviation < -0.5f)  // 向左转
-        turn_direction = -1.0f;
-    // else 直行时 turn_direction = 0
-
-    // 速度补偿：与速度平方成正比（模拟离心力）
-    float speed_compensation = turn_comp_k_speed * fabs(speed) * fabs(speed) * turn_direction;
-
-    // 4. 总补偿 = 舵机补偿 + 速度补偿
-    //    - 舵机补偿：补偿静态重心偏移（低速高速都存在）
-    //    - 速度补偿：补偿动态离心力（只在高速时显著）
-    float total_compensation = servo_compensation + speed_compensation;
-
-    // 5. 限幅处理：防止过度补偿
-    if (total_compensation > turn_comp_max)
+    // 1. 图像误差检查：如果图像误差很小（接近直行），不需要补偿
+    if (fabsf(image_error) < turn_comp_image_threshold)
     {
-        total_compensation = turn_comp_max;
+        current_compensation = 0.0f;
+        return 0.0f;
     }
-    else if (total_compensation < -turn_comp_max)
+
+    // 2. 计算与图像误差成线性关系的系数
+    // error_coeff = turn_comp_k_error × |image_error| / 100
+    float error_coeff = turn_comp_k_error * fabsf(image_error) / 100.0f;
+
+    // 3. 计算动态零点补偿：(舵机偏差) × 速度绝对值 × 增益 × 误差系数 / 10
+    float servo_deviation = servo_angle - servo_center_angle;
+    float dynamic_zero = servo_deviation * (float)fabs(speed) * turn_comp_k_speed * error_coeff / 10.0f;
+
+    // 4. 限幅处理：防止过度补偿
+    if (dynamic_zero > turn_comp_max)
     {
-        total_compensation = -turn_comp_max;
+        dynamic_zero = turn_comp_max;
+    }
+    else if (dynamic_zero < -turn_comp_max)
+    {
+        dynamic_zero = -turn_comp_max;
+    }
+
+    // 5. 死区处理：小于阈值的补偿视为0（避免微小抖动）
+    if (fabsf(dynamic_zero) < turn_comp_k_servo)
+    {
+        dynamic_zero = 0.0f;
     }
 
     // 保存当前补偿值（用于调试显示）
-    current_compensation = total_compensation;
+    current_compensation = dynamic_zero;
 
-    return total_compensation;
+    return dynamic_zero;
 }
 
 //-------------------------------------------------------------------------------------------------------------------

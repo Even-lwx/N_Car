@@ -4,10 +4,9 @@
   自动遍历菜单系统，保存/加载所有参数
   添加新菜单参数无需修改此文件！
 *********************************************************************/
-
-#include "zf_common_headfile.h"
 #include "param_save.h"
-#include "menu.h"
+#include "zf_common_headfile.h"
+
 
 /**************** 外部变量声明 ****************/
 extern Page *Now_Menu;
@@ -22,6 +21,7 @@ extern Page page_delayed_stop;    // 延迟停车参数页面
 extern Page page_output_smooth;   // 输出平滑参数页面
 extern Page page_motor_protect;   // 电机保护参数页面
 extern Page page_turn_comp;       // 转弯补偿参数页面
+extern Page page_steer_pid;       // 转向PID参数页面
 // 添加新页面时在这里声明
 
 /**************** 内部变量 ****************/
@@ -37,6 +37,7 @@ static Page *param_pages[] = {
     &page_output_smooth,   // 输出平滑参数
     &page_motor_protect,   // 电机保护参数
     &page_turn_comp,       // 转弯补偿参数
+    &page_steer_pid,       // 转向PID参数
     // 添加新页面时在这里添加指针
     NULL // 结束标记
 };

@@ -36,7 +36,6 @@ void servo_set_angle(float angle)
         angle = SERVO_MOTOR_L_MAX;
     if (angle > SERVO_MOTOR_R_MAX)
         angle = SERVO_MOTOR_R_MAX;
-    servo_motor_duty = angle;
     pwm_set_duty(SERVO_MOTOR_PWM, SERVO_MOTOR_DUTY(angle));
 }
 

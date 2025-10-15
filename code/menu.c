@@ -6,13 +6,8 @@
  ********************************************************************/
 
 #include "menu.h"
-#include "menu_config.h"
 #include "zf_common_headfile.h"
-#include "pid.h"
-#include "imu.h"
-#include "motor.h"
-#include "servo.h"
-#include "param_save.h"
+
 /**************** 函数声明 ****************/
 void ips_clear(void);
 void show_string(uint16 x, uint16 y, const char *str);
@@ -174,6 +169,20 @@ void Menu_Back(void)
         {
             Now_Menu = Now_Menu->back;
 
+            // 根据当前光标位置调整滚动偏移量，确保光标所在项目可见
+            #define MAX_VISIBLE_ITEMS 6
+            if (Now_Menu->order < Now_Menu->scroll_offset)
+            {
+                // 光标在可见区域上方，向上滚动
+                Now_Menu->scroll_offset = Now_Menu->order;
+            }
+            else if (Now_Menu->order >= Now_Menu->scroll_offset + MAX_VISIBLE_ITEMS)
+            {
+                // 光标在可见区域下方，向下滚动
+                Now_Menu->scroll_offset = Now_Menu->order - MAX_VISIBLE_ITEMS + 1;
+            }
+            // 否则光标已经在可见区域内，不需要调整scroll_offset
+
             ips_clear();
             need_refresh = 1;
         }
@@ -186,7 +195,7 @@ void Menu_Back(void)
                 // 将光标移动到第0项（Cargo）
                 Now_Menu->order = 0;
                 Now_Menu->scroll_offset = 0;
-                // 不需要刷新整个屏幕，光标位置自动更新
+                need_refresh = 1; // 需要刷新屏幕以更新光标位置
             }
         }
     }
@@ -218,6 +227,20 @@ void Menu_Back(void)
         if (Now_Menu->back != NULL)
         {
             Now_Menu = Now_Menu->back;
+
+            // 根据当前光标位置调整滚动偏移量，确保光标所在项目可见
+            #define MAX_VISIBLE_ITEMS 6
+            if (Now_Menu->order < Now_Menu->scroll_offset)
+            {
+                // 光标在可见区域上方，向上滚动
+                Now_Menu->scroll_offset = Now_Menu->order;
+            }
+            else if (Now_Menu->order >= Now_Menu->scroll_offset + MAX_VISIBLE_ITEMS)
+            {
+                // 光标在可见区域下方，向下滚动
+                Now_Menu->scroll_offset = Now_Menu->order - MAX_VISIBLE_ITEMS + 1;
+            }
+            // 否则光标已经在可见区域内，不需要调整scroll_offset
 
             ips_clear();
             need_refresh = 1;

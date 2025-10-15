@@ -33,6 +33,7 @@
  * 2022-09-15       pudding            first version
  ********************************************************************************************************************/
 #include "zf_common_headfile.h"
+#include "image.h"
 #pragma section all "cpu0_dsram"
 // 将本语句与#pragma section all restore语句之间的全局变量都放在CPU0的RAM中
 
@@ -49,6 +50,7 @@ void all_init(void)
 
     // 初始化各个模块
     ips114_init();              // 初始化IPS114液晶屏
+    mt9v03x_init();             // 初始化MT9V03X摄像头
     imu_init();                 // 初始化IMU陀螺仪
     servo_init();               // 初始化舵机
     motor_init();               // 初始化电机和编码器
@@ -68,19 +70,29 @@ int core0_main(void)
     {
         if (enable)
         {
-            // Cargo 模式运行中，停止菜单刷新
-            // 在这里添加你需要在 Cargo 模式执行的代码
+            if (mt9v03x_finish_flag)
+            {
+                // Cargo 模式运行中，停止菜单刷新
+                // 图像处理（在主循环中执行，避免占用中断时间）
+                image_process();
 
-            // 例如：实时显示调试信息
-            // printf("%f,%d,%f\r\n", imu_data.pitch, imu_data.gyro_y, filtered_motor_output);
-            printf("%f,%d\r\n", drive_pwm_output, encoder[1]);
-            // 检测退出（BACK键由20ms中断处理，这里只需要检查enable状态）
+                // 转向PID控制（基于图像偏差和陀螺仪gz）
+                steer_pid_control();
+
+                // 例如：实时显示调试信息
+                // printf("%f,%d,%f\r\n", imu_data.pitch, imu_data.gyro_y, filtered_motor_output);
+                // printf("%f,%d\r\n", drive_pwm_output, encoder[1]);
+                // 检测退出（BACK键由20ms中断处理，这里只需要检查enable状态）
+
+                // 清除图像采集完成标志，允许处理下一帧
+                mt9v03x_finish_flag = 0;
+            }
         }
         else
         {
             // 正常菜单模式
             menu_update();
-            //printf("%f,%d\r\n", imu_data.pitch, imu_data.gyro_y);
+            // printf("%f,%d\r\n", imu_data.pitch, imu_data.gyro_y);
         }
 
         // 减少CPU占用
