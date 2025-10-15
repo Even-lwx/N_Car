@@ -168,7 +168,20 @@ void Menu_Back(void)
         if (Now_Menu->back != NULL)
         {
             Now_Menu = Now_Menu->back;
-            Now_Menu->scroll_offset = 0;  // 重置滚动偏移量，避免显示错乱
+
+            // 根据当前光标位置调整滚动偏移量，确保光标所在项目可见
+            #define MAX_VISIBLE_ITEMS 6
+            if (Now_Menu->order < Now_Menu->scroll_offset)
+            {
+                // 光标在可见区域上方，向上滚动
+                Now_Menu->scroll_offset = Now_Menu->order;
+            }
+            else if (Now_Menu->order >= Now_Menu->scroll_offset + MAX_VISIBLE_ITEMS)
+            {
+                // 光标在可见区域下方，向下滚动
+                Now_Menu->scroll_offset = Now_Menu->order - MAX_VISIBLE_ITEMS + 1;
+            }
+            // 否则光标已经在可见区域内，不需要调整scroll_offset
 
             ips_clear();
             need_refresh = 1;
@@ -182,7 +195,7 @@ void Menu_Back(void)
                 // 将光标移动到第0项（Cargo）
                 Now_Menu->order = 0;
                 Now_Menu->scroll_offset = 0;
-                // 不需要刷新整个屏幕，光标位置自动更新
+                need_refresh = 1; // 需要刷新屏幕以更新光标位置
             }
         }
     }
@@ -214,8 +227,20 @@ void Menu_Back(void)
         if (Now_Menu->back != NULL)
         {
             Now_Menu = Now_Menu->back;
-            Now_Menu->order = 0;          // 重置光标到第一项
-            Now_Menu->scroll_offset = 0;  // 重置滚动偏移量
+
+            // 根据当前光标位置调整滚动偏移量，确保光标所在项目可见
+            #define MAX_VISIBLE_ITEMS 6
+            if (Now_Menu->order < Now_Menu->scroll_offset)
+            {
+                // 光标在可见区域上方，向上滚动
+                Now_Menu->scroll_offset = Now_Menu->order;
+            }
+            else if (Now_Menu->order >= Now_Menu->scroll_offset + MAX_VISIBLE_ITEMS)
+            {
+                // 光标在可见区域下方，向下滚动
+                Now_Menu->scroll_offset = Now_Menu->order - MAX_VISIBLE_ITEMS + 1;
+            }
+            // 否则光标已经在可见区域内，不需要调整scroll_offset
 
             ips_clear();
             need_refresh = 1;
