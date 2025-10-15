@@ -193,9 +193,13 @@ Page page_speed_pid = {
 
 // 3.4 行进轮速度环PID
 float target_speed_step[] = {1.0f, 5.0f, 10.0f};
+uint32 drive_enable_step[] = {1};                   // 行进轮速度环开关步进值（0/1切换）
+float drive_open_loop_step[] = {10.0f, 100.0f, 500.0f}; // 行进轮开环输出步进
 
 CustomData drive_speed_pid_data[] = {
+    {&drive_speed_enable, data_uint32_show, "Enable(0/1)", drive_enable_step, 1, 0, 1, 0},
     {&target_drive_speed, data_float_show, "Target Speed", target_speed_step, 3, 0, 5, 1},
+    {&drive_open_loop_output, data_float_show, "Open Loop Out", drive_open_loop_step, 3, 0, 6, 1},
     {&drive_speed_pid.kp, data_float_show, "Kp", pid_kp_step, 5, 0, 4, 3},
     {&drive_speed_pid.ki, data_float_show, "Ki", pid_ki_step, 5, 0, 4, 3},
     {&drive_speed_pid.kd, data_float_show, "Kd", pid_kd_step, 5, 0, 4, 4},
@@ -206,7 +210,7 @@ CustomData drive_speed_pid_data[] = {
 Page page_drive_speed_pid = {
     .name = "Drive Speed PID",
     .data = drive_speed_pid_data,
-    .len = 6,
+    .len = 8,
     .stage = Menu,
     .back = NULL, // 在 Menu_Config_Init() 中设置
     .enter = {NULL},
@@ -274,12 +278,14 @@ Page page_pid = {
 //============================================================
 float comp_deadzone_step[] = {0.01f, 0.1f, 0.5f};       // 死区阈值步进（度）
 float comp_gain_step[] = {0.01f, 0.1f, 0.5f, 1.0f};    // 动态补偿增益步进
+float comp_k_error_step[] = {0.01f, 0.1f, 0.5f};       // 图像误差系数步进
 float comp_max_step[] = {0.5f, 1.0f, 2.0f};             // 最大补偿限制步进
 float servo_center_step[] = {0.1f, 1.0f, 5.0f};         // 舵机中点角度步进
 float image_error_threshold_step[] = {0.5f, 1.0f, 5.0f}; // 图像误差阈值步进
 
 CustomData turn_comp_data[] = {
     {&turn_comp_k_speed, data_float_show, "Gain", comp_gain_step, 4, 0, 3, 2},
+    {&turn_comp_k_error, data_float_show, "Error Coeff", comp_k_error_step, 3, 0, 3, 2},
     {&turn_comp_k_servo, data_float_show, "Deadzone", comp_deadzone_step, 3, 0, 2, 2},
     {&turn_comp_image_threshold, data_float_show, "Img Err Thres", image_error_threshold_step, 3, 0, 3, 1},
     {&turn_comp_max, data_float_show, "Max Comp", comp_max_step, 3, 0, 3, 1},
@@ -289,7 +295,7 @@ CustomData turn_comp_data[] = {
 Page page_turn_comp = {
     .name = "Turn Compensation",
     .data = turn_comp_data,
-    .len = 5,
+    .len = 6,
     .stage = Menu,
     .back = NULL, // 在 Menu_Config_Init() 中设置
     .enter = {NULL},

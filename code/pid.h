@@ -72,6 +72,10 @@ extern uint32 steer_sample_start; // 图像采样起始行
 extern uint32 steer_sample_end;   // 图像采样结束行
 extern uint32 steer_enable;       // 转向环使能（0=禁用，1=启用）
 
+// 行进轮速度环控制参数
+extern uint32 drive_speed_enable;    // 行进轮速度环使能（0=开环，1=闭环PID）
+extern float drive_open_loop_output; // 行进轮开环输出值（PWM值，-10000~10000）
+
 // 输出平滑参数（导出到菜单）
 extern float output_filter_coeff; // 输出滤波系数
 

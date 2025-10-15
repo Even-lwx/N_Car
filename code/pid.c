@@ -56,6 +56,10 @@ uint32 steer_sample_start = 50;   // 图像采样起始行（从底部算起，�
 uint32 steer_sample_end = 60;     // 图像采样结束行
 uint32 steer_enable = 1;          // 转向环使能（0=禁用，1=启用）
 
+// 行进轮速度环控制参数
+uint32 drive_speed_enable = 1;        // 行进轮速度环使能（0=开环，1=闭环PID）
+float drive_open_loop_output = 0.0f;  // 行进轮开环输出值（PWM值，-10000~10000）
+
 // 目标值
 float target_gyro_rate = 0.0f;    // 目标角速度
 float target_angle = 0.0f;        // 目标角度
@@ -392,11 +396,21 @@ void get_pid_status(float *gyro_error, float *angle_error, float *speed_error,
 /**
  * @brief 行进轮速度环控制
  * @note 独立的速度环，使用encoder[1]作为速度反馈，输出PWM控制行进轮电机
+ *       支持闭环PID和开环输出两种模式
  */
 void drive_speed_loop_control(void)
 {
-    // 速度环PID计算
-    drive_pwm_output = pid_calculate(&drive_speed_pid, target_drive_speed, (float)encoder[1]);
+    // 根据使能开关选择控制模式
+    if (drive_speed_enable)
+    {
+        // 闭环PID模式：速度环PID计算
+        drive_pwm_output = pid_calculate(&drive_speed_pid, target_drive_speed, (float)encoder[1]);
+    }
+    else
+    {
+        // 开环模式：直接使用设定的开环输出值
+        drive_pwm_output = drive_open_loop_output;
+    }
 
     // 控制行进轮电机
     drive_wheel_control((int16)drive_pwm_output);

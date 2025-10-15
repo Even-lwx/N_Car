@@ -23,17 +23,19 @@
 // 补偿值与舵机偏差和速度的乘积成正比，简单直观
 //
 // 补偿公式：
-// dynamic_zero = (servo_angle - servo_center) × |speed| × gain / 100
+// dynamic_zero = (servo_angle - servo_center) × |speed| × gain × (k_error × |image_error| / 100) / 10
 //
 // 计算步骤：
 // 1. 计算舵机偏差：servo_deviation = servo_angle - servo_center
 // 2. 图像误差判断：如果 |image_error| < image_error_threshold，则补偿为0（直行时不补偿）
-// 3. 计算动态补偿：dynamic_zero = servo_deviation × |speed| × gain / 100
-// 4. 限幅处理：限制在 [-turn_comp_max, +turn_comp_max] 范围
-// 5. 死区处理：如果 |dynamic_zero| < deadzone，则补偿为0
+// 3. 计算误差系数：error_coeff = k_error × |image_error| / 100
+// 4. 计算动态补偿：dynamic_zero = servo_deviation × |speed| × gain × error_coeff / 10
+// 5. 限幅处理：限制在 [-turn_comp_max, +turn_comp_max] 范围
+// 6. 死区处理：如果 |dynamic_zero| < deadzone，则补偿为0
 //
 // 物理意义：
-// - 补偿与舵机偏差和速度的乘积成正比
+// - 补偿与舵机偏差、速度、图像误差的乘积成正比
+// - 图像误差越大，补偿增益越大（通过 k_error 系数调节）
 // - 图像误差小（接近直行）时：补偿为0，避免不必要抖动
 // - 静止时（speed=0）：补偿为0
 // - 高速转弯时：补偿显著增大
@@ -41,6 +43,7 @@
 //
 // 参数说明：
 // - gain: 动态补偿增益（建议范围: 0.1 ~ 10.0）
+// - k_error: 图像误差系数（与err值成线性关系，建议范围: 0.1 ~ 5.0）
 // - deadzone: 死区阈值（补偿绝对值小于此值时视为0，默认0.7度）
 // - image_error_threshold: 图像误差阈值（误差小于此值时不补偿，避免直行抖动）
 // - servo_angle: 当前舵机角度（度）
@@ -51,6 +54,7 @@
 // *************************** 全局变量声明 ***************************
 extern float turn_comp_k_servo;      // 死区阈值（补偿绝对值小于此值时视为0，默认0.7度）
 extern float turn_comp_k_speed;      // 动态补偿增益（建议范围: 0.1 ~ 10.0）
+extern float turn_comp_k_error;      // 图像误差系数（与err值成线性关系，默认1.0）
 extern float turn_comp_max;          // 最大补偿角度限制（防止补偿过大，默认±8度）
 extern float servo_center_angle;     // 舵机中点角度（默认90度，可调整）
 extern float turn_comp_image_threshold; // 图像误差阈值（误差小于此值时不补偿，默认5.0）
@@ -74,7 +78,8 @@ void turn_compensation_init(void);
 // 返回参数     float: 补偿角度（度）
 // 使用示例     float compensation = turn_compensation_calculate(servo_angle, encoder[0], image_error);
 // 备注信息     返回值为补偿角度，需要叠加到目标角度或机械零点上
-//              补偿 = (舵机偏差) × |速度| × 增益 / 100
+//              补偿 = (舵机偏差) × |速度| × 增益 × (误差系数 × |图像误差| / 100) / 10
+//              - 误差系数通过 turn_comp_k_error 调节，使补偿与图像误差成线性关系
 //              - 然后限幅到 [-turn_comp_max, +turn_comp_max]
 //              - 如果 |image_error| < image_error_threshold，则补偿为0（直行不补偿）
 //              - 如果 |补偿| < deadzone，则补偿为0（死区处理）

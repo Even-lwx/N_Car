@@ -15,6 +15,7 @@
 // *************************** 全局变量定义 ***************************
 float turn_comp_k_servo = 0.7f;            // 死区阈值（补偿绝对值小于此值时视为0，默认0.7度）
 float turn_comp_k_speed = 1.0f;            // 动态补偿增益（默认1.0，建议范围: 0.1 ~ 10.0）
+float turn_comp_k_error = 1.0f;            // 图像误差系数（与err值成线性关系，默认1.0）
 float turn_comp_max = 8.0f;                // 最大补偿角度限制（±8度）
 float servo_center_angle = 90.0f;          // 舵机中点角度（默认90度）
 float turn_comp_image_threshold = 5.0f;    // 图像误差阈值（误差小于此值时不补偿，默认5.0）
@@ -46,7 +47,8 @@ void turn_compensation_init(void)
 // 返回参数     float: 补偿角度（度）
 // 使用示例     float compensation = turn_compensation_calculate(servo_angle, encoder[1], image_error);
 // 备注信息     补偿公式：
-//              dynamic_zero = (servo_angle - servo_center) × speed × gain / 10
+//              error_coeff = turn_comp_k_error × |image_error| / 100
+//              dynamic_zero = (servo_angle - servo_center) × speed × gain × error_coeff / 10
 //              然后限幅到 [-turn_comp_max, +turn_comp_max]
 //              如果 |image_error| < image_error_threshold，则补偿为0（直行不补偿）
 //              如果补偿绝对值 < deadzone，则补偿为0（死区处理）
@@ -61,11 +63,15 @@ float turn_compensation_calculate(float servo_angle, float speed, float image_er
         return 0.0f;
     }
 
-    // 2. 计算动态零点补偿：(舵机偏差) × 速度绝对值 × 增益 / 10
-    float servo_deviation = servo_angle - servo_center_angle;
-    float dynamic_zero = servo_deviation * (float)fabs(speed) * turn_comp_k_speed / 10.0f;
+    // 2. 计算与图像误差成线性关系的系数
+    // error_coeff = turn_comp_k_error × |image_error| / 100
+    float error_coeff = turn_comp_k_error * fabsf(image_error) / 100.0f;
 
-    // 3. 限幅处理：防止过度补偿
+    // 3. 计算动态零点补偿：(舵机偏差) × 速度绝对值 × 增益 × 误差系数 / 10
+    float servo_deviation = servo_angle - servo_center_angle;
+    float dynamic_zero = servo_deviation * (float)fabs(speed) * turn_comp_k_speed * error_coeff / 10.0f;
+
+    // 4. 限幅处理：防止过度补偿
     if (dynamic_zero > turn_comp_max)
     {
         dynamic_zero = turn_comp_max;
@@ -75,7 +81,7 @@ float turn_compensation_calculate(float servo_angle, float speed, float image_er
         dynamic_zero = -turn_comp_max;
     }
 
-    // 4. 死区处理：小于阈值的补偿视为0（避免微小抖动）
+    // 5. 死区处理：小于阈值的补偿视为0（避免微小抖动）
     if (fabsf(dynamic_zero) < turn_comp_k_servo)
     {
         dynamic_zero = 0.0f;
