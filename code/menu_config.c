@@ -14,7 +14,7 @@
 
 #include "menu_config.h"
 #include "zf_common_headfile.h"
-
+#include "voltage.h"
 
 /**************** 外部声明（来自menu.c的内核函数） ****************/
 extern void ips_clear(void);
@@ -31,7 +31,7 @@ extern void drive_wheel_control(int16 pwm_value);    // 参数类型为 int16
 extern void delayed_stop_start_with_param(void);     // 延迟停车函数
 
 // 摄像头相关函数（来自Seekfree库）
-extern uint8 mt9v03x_image[MT9V03X_H][MT9V03X_W];    // 摄像头图像数据
+extern uint8 mt9v03x_image[MT9V03X_H][MT9V03X_W]; // 摄像头图像数据
 extern void ips114_show_gray_image(uint16 x, uint16 y, const uint8 *image, uint16 width, uint16 height, uint16 dis_width, uint16 dis_height, uint8 threshold);
 extern void ips114_draw_line(uint16 x_start, uint16 y_start, uint16 x_end, uint16 y_end, const uint16 color);
 
@@ -193,7 +193,7 @@ Page page_speed_pid = {
 
 // 3.4 行进轮速度环PID
 float target_speed_step[] = {1.0f, 5.0f, 10.0f};
-uint32 drive_enable_step[] = {1};                   // 行进轮速度环开关步进值（0/1切换）
+uint32 drive_enable_step[] = {1};                       // 行进轮速度环开关步进值（0/1切换）
 float drive_open_loop_step[] = {10.0f, 100.0f, 500.0f}; // 行进轮开环输出步进
 
 CustomData drive_speed_pid_data[] = {
@@ -276,11 +276,11 @@ Page page_pid = {
 //============================================================
 // 4. 转弯补偿参数菜单 - Turn Compensation (动态零点补偿)
 //============================================================
-float comp_deadzone_step[] = {0.01f, 0.1f, 0.5f};       // 死区阈值步进（度）
-float comp_gain_step[] = {0.01f, 0.1f, 0.5f, 1.0f};    // 动态补偿增益步进
-float comp_k_error_step[] = {0.01f, 0.1f, 0.5f};       // 图像误差系数步进
-float comp_max_step[] = {0.5f, 1.0f, 2.0f};             // 最大补偿限制步进
-float servo_center_step[] = {0.1f, 1.0f, 5.0f};         // 舵机中点角度步进
+float comp_deadzone_step[] = {0.01f, 0.1f, 0.5f};        // 死区阈值步进（度）
+float comp_gain_step[] = {0.01f, 0.1f, 0.5f, 1.0f};      // 动态补偿增益步进
+float comp_k_error_step[] = {0.01f, 0.1f, 0.5f};         // 图像误差系数步进
+float comp_max_step[] = {0.5f, 1.0f, 2.0f};              // 最大补偿限制步进
+float servo_center_step[] = {0.1f, 1.0f, 5.0f};          // 舵机中点角度步进
 float image_error_threshold_step[] = {0.5f, 1.0f, 5.0f}; // 图像误差阈值步进
 
 CustomData turn_comp_data[] = {
@@ -307,7 +307,7 @@ Page page_turn_comp = {
 //============================================================
 // 4.2 转向PID参数菜单 - Steering PID (Image Error P + Gyro Gz D)
 //============================================================
-uint32 steer_enable_step[] = {1};                   // 转向环开关步进值（0/1切换）
+uint32 steer_enable_step[] = {1}; // 转向环开关步进值（0/1切换）
 float steer_kp_step[] = {0.01f, 0.1f, 1.0f, 5.0f};
 float steer_kd_step[] = {0.001f, 0.01f, 0.1f};
 float steer_limit_step[] = {1.0f, 5.0f, 10.0f};
@@ -517,11 +517,66 @@ Page page_debug = {
 };
 
 //============================================================
-// 8. 摄像头图像显示
+// 8. 电压监控页面
+//============================================================
+void voltage_monitor_mode(void)
+{
+    ips_clear();
+    while (1)
+    {
+        show_string(0, 0, "Voltage Monitor");
+
+        // 显示电压值
+        float voltage = voltage_get_value();
+        show_string(0, 3, "Voltage:");
+        show_float(10, 3, voltage, 2, 3);
+        show_string(15, 3, "V");
+        printf("%.3f\r\n", voltage);
+        // 显示ADC原始值
+        uint16 adc_value = voltage_get_adc();
+        show_string(0, 5, "ADC:");
+        show_int(10, 5, adc_value, 4);
+
+        // 电压警告提示（低于11.4V显示警告）
+        if (voltage < 11.4f)
+        {
+            show_string_color(0, 9, "LOW BATTERY!", RGB565_RED);
+        }
+        else
+        {
+            show_string_color(0, 9, "NORMAL      ", RGB565_GREEN);
+        }
+
+        show_string(0, 12, "Press BACK");
+
+        // 检测返回键
+        if (Key_Scan() == KEY_BACK)
+        {
+            break;
+        }
+
+        system_delay_ms(100); // 每100ms刷新一次
+    }
+}
+
+Page page_voltage = {
+    .name = "Voltage Monitor",
+    .data = NULL,
+    .len = 0,
+    .stage = Funtion,
+    .back = NULL, // 在 Menu_Config_Init() 中设置
+    .enter = {NULL},
+    .content = {.function = voltage_monitor_mode},
+    .order = 0,
+    .scroll_offset = 0,
+};
+
+//============================================================
+// 9. 摄像头图像显示
 //============================================================
 void camera_display_mode(void)
 {
-    uint8 display_mode = 0;  // 显示模式：0=灰度图，1=二值化图（使用大津法阈值）
+    uint8 display_mode = 0; // 显示模式：0=灰度图，1=二值化图（使用大津法阈值）
     uint8 key = KEY_NONE;
 
     ips_clear();
@@ -534,14 +589,12 @@ void camera_display_mode(void)
         if (display_mode == 1)
         {
             image_threshold = (uint8)otsu_get_threshold(mt9v03x_image[0], MT9V03X_W, MT9V03X_H);
-            threshold = (int)image_threshold;  // 显式转换避免警告
+            threshold = (int)image_threshold; // 显式转换避免警告
         }
 
         // 每次循环都刷新图像（摄像头是实时采集的）
         ips114_show_gray_image(0, 0, mt9v03x_image[0], MT9V03X_W, MT9V03X_H, MT9V03X_W, MT9V03X_H, image_threshold);
         image_process();
-
-    
 
         // 绘制赛道线条（彩色叠加）
         // 从底部往上绘制左右边界和中线
@@ -581,8 +634,6 @@ void camera_display_mode(void)
             // 采样结束行（上线）
             ips114_draw_line(0, (uint16)steer_sample_end, MT9V03X_W - 1, (uint16)steer_sample_end, RGB565_YELLOW);
         }
-        
-    
 
         // 在屏幕右上角显示当前阈值（二值化模式下显示大津法计算的阈值）
         if (display_mode == 1)
@@ -597,13 +648,13 @@ void camera_display_mode(void)
         // 检测OK键 - 切换显示模式
         if (key == KEY_OK)
         {
-            display_mode = !display_mode;  // 在0和1之间切换
-            system_delay_ms(200);          // 防止按键连续触发
+            display_mode = !display_mode; // 在0和1之间切换
+            system_delay_ms(200);         // 防止按键连续触发
         }
         // 检测返回键 - 退出
         else if (key == KEY_BACK)
         {
-            ips_clear();  // 退出前清空屏幕，避免和菜单渲染冲突
+            ips_clear(); // 退出前清空屏幕，避免和菜单渲染冲突
             break;
         }
 
@@ -624,15 +675,15 @@ Page page_camera = {
 };
 
 //============================================================
-// 9. 主菜单
+// 10. 主菜单
 //============================================================
 Page main_page = {
     .name = "Main Menu",
     .data = NULL,
-    .len = 7, // 子菜单数量（增加了Camera View）
+    .len = 8, // 子菜单数量（增加了Voltage Monitor）
     .stage = Menu,
     .back = NULL,
-    .enter = {&page_cargo, &page_delayed_stop, &page_servo, &page_pid, &page_imu, &page_debug, &page_camera},
+    .enter = {&page_cargo, &page_delayed_stop, &page_servo, &page_pid, &page_imu, &page_debug, &page_camera, &page_voltage},
     .content = {NULL},
     .order = 0,
     .scroll_offset = 0,
@@ -654,7 +705,8 @@ void Menu_Config_Init(void)
     page_pid.back = &main_page;
     page_imu.back = &main_page;
     page_debug.back = &main_page;
-    page_camera.back = &main_page; // 摄像头显示页面
+    page_camera.back = &main_page;  // 摄像头显示页面
+    page_voltage.back = &main_page; // 电压监控页面
 
     // 设置PID子页面的父指针
     page_gyro_pid.back = &page_pid;
@@ -664,7 +716,7 @@ void Menu_Config_Init(void)
     page_output_smooth.back = &page_pid;
     page_motor_protect.back = &page_pid;
     page_turn_comp.back = &page_pid;
-    page_steer_pid.back = &page_pid;  // 转向PID参数页面
+    page_steer_pid.back = &page_pid; // 转向PID参数页面
 
     // 设置IMU子页面的父指针
     page_imu_params.back = &page_imu;

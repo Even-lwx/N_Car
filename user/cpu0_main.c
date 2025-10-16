@@ -46,7 +46,8 @@ void all_init(void)
     Param_Load_All();
     Menu_Init(); // 初始化菜单系统
     // 蜂鸣器初始化（最早初始化，用于系统启动提示和保护报警）
-    buzzer_init(); // 初始化蜂鸣器
+    buzzer_init();  // 初始化蜂鸣器
+    voltage_init(); // 初始化电压检测模块
 
     // 初始化各个模块
     ips114_init();              // 初始化IPS114液晶屏
