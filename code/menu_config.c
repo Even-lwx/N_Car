@@ -527,12 +527,12 @@ void voltage_monitor_mode(void)
         show_string(0, 0, "Voltage Monitor");
 
         // 显示电压值
-        float voltage = voltage_get_value();
+        float voltage = voltage_get_calibrated(voltage_calibration_factor);
         show_string(0, 3, "Voltage:");
         show_float(10, 3, voltage, 2, 3);
         show_string(15, 3, "V");
-        printf("%.3f\r\n", voltage);
-        // 显示ADC原始值
+        // printf("%.3f,%.3f\r\n", voltage, voltage_get_calibrated(voltage_calibration_factor));
+        //  显示ADC原始值
         uint16 adc_value = voltage_get_adc();
         show_string(0, 5, "ADC:");
         show_int(10, 5, adc_value, 4);

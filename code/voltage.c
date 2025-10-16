@@ -18,8 +18,11 @@
 #include "voltage.h"
 #include "zf_common_headfile.h"
 
+// 误差校准系数
+float voltage_calibration_factor = 0.9889f; // 初始校准系数为1.0（无校准）
+
 // 滑动平均滤波缓冲区
-#define VOLTAGE_FILTER_SIZE 20
+#define VOLTAGE_FILTER_SIZE 30
 static uint16 adc_buffer[VOLTAGE_FILTER_SIZE] = {0};
 static uint8 buffer_index = 0;
 static uint8 sample_count = 0; // 已采集的样本数

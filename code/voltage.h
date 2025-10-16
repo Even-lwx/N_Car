@@ -32,6 +32,8 @@
 #define VOLTAGE_DIVIDER_RATIO 4.0f
 #define VOLTAGE_MAX_RANGE 36.3f
 
+extern float voltage_calibration_factor; // 校准系数
+
 // 函数接口
 void voltage_init(void);
 uint16 voltage_get_adc(void);
