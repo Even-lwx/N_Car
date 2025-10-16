@@ -90,6 +90,7 @@ int core0_main(void)
         }
         else
         {
+            
             // 正常菜单模式
             menu_update();
             // printf("%f,%d\r\n", imu_data.pitch, imu_data.gyro_y);

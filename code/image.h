@@ -16,28 +16,44 @@
 //============================================================
 
 // 图像尺寸宏定义（使用MT9V03X摄像头的分辨率）
-#define IMAGE_WIDTH  MT9V03X_W  // 图像宽度 188
-#define IMAGE_HEIGHT MT9V03X_H  // 图像高度 120
+#define IMAGE_WIDTH MT9V03X_W  // 图像宽度 188
+#define IMAGE_HEIGHT MT9V03X_H // 图像高度 120
 
 // 转弯标准范围宏定义
-#define TURN_STANDARD_START turn_start  // 转弯检测起始行
-#define TURN_STANDARD_END turn_end      // 转弯检测结束行
+#define TURN_STANDARD_START turn_start // 转弯检测起始行
+#define TURN_STANDARD_END turn_end     // 转弯检测结束行
+
+// 底部白色矩形区域配置（用于屏蔽车体）
+#define WHITE_RECT_WIDTH 50  // 矩形宽度（像素）
+#define WHITE_RECT_HEIGHT 45 // 矩形高度（像素）
+#define WHITE_RECT_ENABLE 1  // 使能开关（1=开启，0=关闭）
+
+// 图像误差采样行配置（从图像底部往上数）
+#define IMAGE_ERR_ROW1 110 // 误差采样行1（默认值）
+#define IMAGE_ERR_ROW2 105 // 误差采样行2（默认值）
+#define IMAGE_ERR_ROW3 100 // 误差采样行3（默认值）
 
 //============================================================
 // 全局变量声明
 //============================================================
 
 // -------------------- 图像处理基本参数 --------------------
-extern int threshold;           // 全局二值化阈值
-extern uint8 image_proess;      // 图像处理标志
-extern int turn_start;          // 转弯检测起始行
-extern int turn_end;            // 转弯检测结束行
+extern int threshold;      // 全局二值化阈值
+extern uint8 image_proess; // 图像处理标志
+extern int turn_start;     // 转弯检测起始行
+extern int turn_end;       // 转弯检测结束行
+
+// 图像误差采样行
+extern uint32 image_err_row1;   // 误差采样行1
+extern uint32 image_err_row2;   // 误差采样行2
+extern uint32 image_err_row3;   // 误差采样行3
+extern uint32 image_error_mode; // 误差计算模式：0=原版单行采样，1=智能三行采样
 
 // -------------------- 图像数据 --------------------
-extern uint8 image_copy[IMAGE_HEIGHT][IMAGE_WIDTH];  // 图像副本数组
-extern volatile int Left_Line[MT9V03X_H];            // 左边界数组
-extern volatile int Right_Line[MT9V03X_H];           // 右边界数组
-extern const uint8 Road_Standard_Wide[MT9V03X_H];    // 赛道标准宽度数组
+extern uint8 image_copy[IMAGE_HEIGHT][IMAGE_WIDTH]; // 图像副本数组
+extern volatile int Left_Line[MT9V03X_H];           // 左边界数组
+extern volatile int Right_Line[MT9V03X_H];          // 右边界数组
+extern const uint8 Road_Standard_Wide[MT9V03X_H];   // 赛道标准宽度数组
 
 // -------------------- 赛道元素检测标志 --------------------
 extern volatile int Cross_Flag;         // 十字路口检测标志
@@ -49,13 +65,13 @@ extern volatile int right_circle_flag;  // 右环岛标志（0/1/2/3不同状态
 extern volatile int Zebra_Stripes_Flag; // 斑马线标志位
 
 // -------------------- 边界搜索相关 --------------------
-extern volatile int Search_Stop_Line;           // 边界搜索停止行
-extern int Longest_White_Column_Left[2];        // 左侧最长白列：[0]长度，[1]列号
-extern int Longest_White_Column_Right[2];       // 右侧最长白列：[0]长度，[1]列号
+extern volatile int Search_Stop_Line;     // 边界搜索停止行
+extern int Longest_White_Column_Left[2];  // 左侧最长白列：[0]长度，[1]列号
+extern int Longest_White_Column_Right[2]; // 右侧最长白列：[0]长度，[1]列号
 
 // -------------------- 编码器相关变量 --------------------
-extern int Encoder_Left;  // 左编码器累计值
-extern int encoder_sum;   // 编码器总和
+extern int Encoder_Left; // 左编码器累计值
+extern int encoder_sum;  // 编码器总和
 
 //============================================================
 // 函数声明
@@ -151,12 +167,21 @@ void Draw_Line(int startX, int startY, int endX, int endY);
 // -------------------- 图像分析函数 --------------------
 /**
  * @brief 计算图像中线偏差的平均值
- * @param start_point 起始行（从图像底部算起）
- * @param end_point 结束行
+ * @param start_point 起始行（数组索引，0=图像顶部，119=图像底部）
+ * @param end_point 结束行（数组索引）
  * @return 中线偏差平均值（正值表示偏右，负值表示偏左）
  * @note 用于转向PID控制的P环输入
+ *       如果采样行超出搜索范围，会自动调整到有效范围
  */
 float err_sum_average(uint8 start_point, uint8 end_point);
+
+/**
+ * @brief 智能图像误差计算（自动跳过丢线行）
+ * @return 中线偏差平均值（正值表示偏右，负值表示偏左）
+ * @note 从三个采样行中选择未丢线的行进行计算，如果三行都丢线返回0
+ *       自动将超出搜索范围的采样行调整到有效范围
+ */
+float image_error_smart(void);
 
 /**
  * @brief 检测图像是否出界
