@@ -36,10 +36,20 @@ extern void ips114_show_gray_image(uint16 x, uint16 y, const uint8 *image, uint1
 extern void ips114_draw_line(uint16 x_start, uint16 y_start, uint16 x_end, uint16 y_end, const uint16 color);
 
 // 图像处理相关数据
-extern volatile int Left_Line[MT9V03X_H];  // 左边界数组
-extern volatile int Right_Line[MT9V03X_H]; // 右边界数组
-extern uint32 steer_sample_start;          // 转向PID采样起始行
-extern uint32 steer_sample_end;            // 转向PID采样结束行
+extern uint8_t binaryImage[IMAGE_HEIGHT][IMAGE_WIDTH]; // 二值化图像数组
+extern volatile int Left_Line[MT9V03X_H];              // 左边界数组
+extern volatile int Right_Line[MT9V03X_H];             // 右边界数组
+extern uint32 steer_sample_start;                      // 转向PID采样起始行
+extern uint32 steer_sample_end;                        // 转向PID采样结束行
+extern int Longest_White_Column_Left[2];               // 左侧最长白列：[0]长度，[1]列号
+extern int Longest_White_Column_Right[2];              // 右侧最长白列：[0]长度，[1]列号
+extern volatile int Search_Stop_Line;                  // 边界搜索停止行
+
+// 图像误差采样行
+extern uint32 image_err_row1;   // 误差采样行1
+extern uint32 image_err_row2;   // 误差采样行2
+extern uint32 image_err_row3;   // 误差采样行3
+extern uint32 image_error_mode; // 误差计算模式（0=原版，1=智能三行）
 
 /**************** 外部变量引用 ****************/
 extern volatile bool enable; // volatile 关键字
@@ -312,20 +322,26 @@ float steer_kp_step[] = {0.01f, 0.1f, 1.0f, 5.0f};
 float steer_kd_step[] = {0.001f, 0.01f, 0.1f};
 float steer_limit_step[] = {1.0f, 5.0f, 10.0f};
 uint32 sample_row_step[] = {1, 5, 10};
+uint32 err_row_step[] = {1, 5, 10}; // 图像误差采样行步进值
+uint32 err_mode_step[] = {1};       // 误差计算模式步进值（0/1切换）
 
 CustomData steer_pid_data[] = {
     {&steer_enable, data_uint32_show, "Enable (0/1)", steer_enable_step, 1, 0, 1, 0},
+    {&image_error_mode, data_uint32_show, "Err Mode(0/1)", err_mode_step, 1, 0, 1, 0},
     {&steer_kp, data_float_show, "Kp (Image)", steer_kp_step, 4, 0, 3, 2},
     {&steer_kd, data_float_show, "Kd (Gyro Gz)", steer_kd_step, 3, 0, 3, 3},
     {&steer_output_limit, data_float_show, "Output Limit", steer_limit_step, 3, 0, 4, 1},
     {&steer_sample_start, data_uint32_show, "Sample Start", sample_row_step, 3, 0, 3, 0},
     {&steer_sample_end, data_uint32_show, "Sample End", sample_row_step, 3, 0, 3, 0},
+    {&image_err_row1, data_uint32_show, "Err Row 1", err_row_step, 3, 0, 3, 0},
+    {&image_err_row2, data_uint32_show, "Err Row 2", err_row_step, 3, 0, 3, 0},
+    {&image_err_row3, data_uint32_show, "Err Row 3", err_row_step, 3, 0, 3, 0},
 };
 
 Page page_steer_pid = {
     .name = "Steer PID",
     .data = steer_pid_data,
-    .len = 6,
+    .len = 10, // 更新菜单项数量（增加误差模式选择）
     .stage = Menu,
     .back = NULL, // 在 Menu_Config_Init() 中设置
     .enter = {NULL},
@@ -576,25 +592,27 @@ Page page_voltage = {
 //============================================================
 void camera_display_mode(void)
 {
-    uint8 display_mode = 0; // 显示模式：0=灰度图，1=二值化图（使用大津法阈值）
+    uint8 display_mode = 0; // 显示模式：0=灰度图，1=二值化图（使用image_process处理后的数组）
     uint8 key = KEY_NONE;
 
     ips_clear();
 
     while (1)
     {
-        uint8 image_threshold = 0;
+        // 调用图像处理函数（包含二值化和白色矩形绘制）
+        image_process();
 
-        // 如果是二值化模式，使用大津法动态计算阈值
+        // 根据显示模式选择显示内容
         if (display_mode == 1)
         {
-            image_threshold = (uint8)otsu_get_threshold(mt9v03x_image[0], MT9V03X_W, MT9V03X_H);
-            threshold = (int)image_threshold; // 显式转换避免警告
+            // 二值化模式：显示处理后的binaryImage（包含白色矩形）
+            ips114_show_gray_image(0, 0, binaryImage[0], MT9V03X_W, MT9V03X_H, MT9V03X_W, MT9V03X_H, 0);
         }
-
-        // 每次循环都刷新图像（摄像头是实时采集的）
-        ips114_show_gray_image(0, 0, mt9v03x_image[0], MT9V03X_W, MT9V03X_H, MT9V03X_W, MT9V03X_H, image_threshold);
-        image_process();
+        else
+        {
+            // 灰度模式：显示原始图像
+            ips114_show_gray_image(0, 0, mt9v03x_image[0], MT9V03X_W, MT9V03X_H, MT9V03X_W, MT9V03X_H, 0);
+        }
 
         // 绘制赛道线条（彩色叠加）
         // 从底部往上绘制左右边界和中线
@@ -626,20 +644,56 @@ void camera_display_mode(void)
             }
         }
 
-        // 绘制转向PID采样范围的上下线（黄色）
-        if (steer_sample_start < MT9V03X_H && steer_sample_end < MT9V03X_H)
+        // 根据误差计算模式绘制不同的采样线
+        if (image_error_mode == 0)
         {
-            // 采样起始行（下线）
-            ips114_draw_line(0, (uint16)steer_sample_start, MT9V03X_W - 1, (uint16)steer_sample_start, RGB565_YELLOW);
-            // 采样结束行（上线）
-            ips114_draw_line(0, (uint16)steer_sample_end, MT9V03X_W - 1, (uint16)steer_sample_end, RGB565_YELLOW);
+            // 模式0（原版）：绘制转向PID采样范围的上下线（黄色）
+            if (steer_sample_start < MT9V03X_H && steer_sample_end < MT9V03X_H)
+            {
+                // 采样起始行（下线）
+                ips114_draw_line(0, (uint16)steer_sample_start, MT9V03X_W - 1, (uint16)steer_sample_start, RGB565_YELLOW);
+                // 采样结束行（上线）
+                ips114_draw_line(0, (uint16)steer_sample_end, MT9V03X_W - 1, (uint16)steer_sample_end, RGB565_YELLOW);
+            }
+        }
+        else
+        {
+            // 模式1（智能三行）：绘制三条误差采样行（洋红色/紫红色）
+            if (image_err_row1 < MT9V03X_H)
+            {
+                ips114_draw_line(0, (uint16)image_err_row1, MT9V03X_W - 1, (uint16)image_err_row1, RGB565_MAGENTA);
+            }
+            if (image_err_row2 < MT9V03X_H)
+            {
+                ips114_draw_line(0, (uint16)image_err_row2, MT9V03X_W - 1, (uint16)image_err_row2, RGB565_MAGENTA);
+            }
+            if (image_err_row3 < MT9V03X_H)
+            {
+                ips114_draw_line(0, (uint16)image_err_row3, MT9V03X_W - 1, (uint16)image_err_row3, RGB565_MAGENTA);
+            }
+        }
+
+        // 绘制最长白列的两条竖线（青色）
+        if (Longest_White_Column_Left[0] > 0 && Longest_White_Column_Left[1] >= 0 && Longest_White_Column_Left[1] < MT9V03X_W)
+        {
+            // 左侧最长白列：从底部绘制到搜索停止行
+            uint16 top_row = (Search_Stop_Line > 0) ? (MT9V03X_H - Search_Stop_Line) : 0;
+            ips114_draw_line((uint16)Longest_White_Column_Left[1], MT9V03X_H - 1,
+                             (uint16)Longest_White_Column_Left[1], top_row, RGB565_CYAN);
+        }
+        if (Longest_White_Column_Right[0] > 0 && Longest_White_Column_Right[1] >= 0 && Longest_White_Column_Right[1] < MT9V03X_W)
+        {
+            // 右侧最长白列：从底部绘制到搜索停止行
+            uint16 top_row = (Search_Stop_Line > 0) ? (MT9V03X_H - Search_Stop_Line) : 0;
+            ips114_draw_line((uint16)Longest_White_Column_Right[1], MT9V03X_H - 1,
+                             (uint16)Longest_White_Column_Right[1], top_row, RGB565_CYAN);
         }
 
         // 在屏幕右上角显示当前阈值（二值化模式下显示大津法计算的阈值）
         if (display_mode == 1)
         {
-            show_string(18, 0, "T:");
-            show_int(20, 0, threshold, 3);
+            show_string(25, 0, "T:");
+            show_int(27, 0, threshold, 3);
         }
 
         // 扫描按键

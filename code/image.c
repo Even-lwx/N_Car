@@ -13,8 +13,8 @@
 // 宏定义
 //============================================================
 
-#define IMG_BLACK 0     // 黑色像素值
-#define IMG_WHITE 255   // 白色像素值
+#define IMG_BLACK 0   // 黑色像素值
+#define IMG_WHITE 255 // 白色像素值
 
 //============================================================
 // 全局变量定义
@@ -30,66 +30,71 @@ int Ramp_offset;                    // 坡道偏移量
 volatile int Zebra_Stripes_Flag;    // 斑马线标志位
 
 // -------------------- 编码器相关 --------------------
-int Encoder_Left = 0;  // 左编码器累计值
-int encoder_sum = 0;   // 编码器总和
+int Encoder_Left = 0; // 左编码器累计值
+int encoder_sum = 0;  // 编码器总和
 
 // -------------------- 图像数据数组 --------------------
-uint8 image_copy[IMAGE_HEIGHT][IMAGE_WIDTH];  // 图像副本数组
+uint8 image_copy[IMAGE_HEIGHT][IMAGE_WIDTH]; // 图像副本数组
 
-extern const uint8 Image_Flags[][9][8];       // 外部图像标志数组
+extern const uint8 Image_Flags[][9][8];                // 外部图像标志数组
 extern uint8_t binaryImage[IMAGE_HEIGHT][IMAGE_WIDTH]; // 二值化图像数组
 
-volatile int Left_Line[MT9V03X_H];            // 左边界数组
-volatile int Right_Line[MT9V03X_H];           // 右边界数组
-volatile int Mid_Line[MT9V03X_H];             // 中线数组
-volatile int Road_Wide[MT9V03X_H];            // 赛道宽度数组
-volatile int White_Column[MT9V03X_W];         // 白列统计数组
+volatile int Left_Line[MT9V03X_H];    // 左边界数组
+volatile int Right_Line[MT9V03X_H];   // 右边界数组
+volatile int Mid_Line[MT9V03X_H];     // 中线数组
+volatile int Road_Wide[MT9V03X_H];    // 赛道宽度数组
+volatile int White_Column[MT9V03X_W]; // 白列统计数组
 
 // -------------------- 边界搜索相关 --------------------
-volatile int Search_Stop_Line;                // 边界搜索停止行
-volatile int Boundry_Start_Left;              // 左边界起始行
-volatile int Boundry_Start_Right;             // 右边界起始行
-volatile int Left_Lost_Time;                  // 左边界丢失次数
-volatile int Right_Lost_Time;                 // 右边界丢失次数
-volatile int Both_Lost_Time;                  // 双边界丢失次数
+volatile int Search_Stop_Line;    // 边界搜索停止行
+volatile int Boundry_Start_Left;  // 左边界起始行
+volatile int Boundry_Start_Right; // 右边界起始行
+volatile int Left_Lost_Time;      // 左边界丢失次数
+volatile int Right_Lost_Time;     // 右边界丢失次数
+volatile int Both_Lost_Time;      // 双边界丢失次数
 
-int Longest_White_Column_Left[2];             // 左侧最长白列：[0]长度，[1]列号
-int Longest_White_Column_Right[2];            // 右侧最长白列：[0]长度，[1]列号
+int Longest_White_Column_Left[2];  // 左侧最长白列：[0]长度，[1]列号
+int Longest_White_Column_Right[2]; // 右侧最长白列：[0]长度，[1]列号
 
-int Left_Lost_Flag[MT9V03X_H];                // 左边界丢失标志数组
-int Right_Lost_Flag[MT9V03X_H];               // 右边界丢失标志数组
+int Left_Lost_Flag[MT9V03X_H];  // 左边界丢失标志数组
+int Right_Lost_Flag[MT9V03X_H]; // 右边界丢失标志数组
 
 // -------------------- 拐点检测 --------------------
-volatile int Left_Down_Find = 0;   // 左下拐点位置
-volatile int Left_Up_Find = 0;     // 左上拐点位置
-volatile int Right_Down_Find = 0;  // 右下拐点位置
-volatile int Right_Up_Find = 0;    // 右上拐点位置
+volatile int Left_Down_Find = 0;  // 左下拐点位置
+volatile int Left_Up_Find = 0;    // 左上拐点位置
+volatile int Right_Down_Find = 0; // 右下拐点位置
+volatile int Right_Up_Find = 0;   // 右上拐点位置
 
 // -------------------- 赛道标准宽度查找表 --------------------
 const uint8 Road_Standard_Wide[MT9V03X_H] =
-{
-    41, 42, 43, 45, 46, 47, 49, 49, 51, 53,
-    53, 55, 55, 57, 58, 59, 61, 62, 63, 64,
-    65, 67, 68, 69, 70, 72, 73, 74, 76, 76,
-    78, 79, 80, 82, 82, 84, 86, 86, 88, 88,
-    90, 91, 92, 94, 95, 96, 97, 98, 100, 100,
-    102, 103, 105, 105, 107, 108, 109, 111, 112, 113,
-    114, 116, 117, 118, 119, 120, 122, 123, 124, 126,
-    126, 128, 129, 130, 132, 132, 134, 134, 136, 138,
-    138, 140, 140, 142, 144, 144, 146, 146, 148, 149,
-    150, 151, 152, 154, 155, 156, 157, 158, 159, 161,
-    162, 163, 164, 165, 166, 167, 169, 170, 171, 172,
-    173, 175, 175, 177, 177, 179, 180, 181, 184, 184
-};
+    {
+        41, 42, 43, 45, 46, 47, 49, 49, 51, 53,
+        53, 55, 55, 57, 58, 59, 61, 62, 63, 64,
+        65, 67, 68, 69, 70, 72, 73, 74, 76, 76,
+        78, 79, 80, 82, 82, 84, 86, 86, 88, 88,
+        90, 91, 92, 94, 95, 96, 97, 98, 100, 100,
+        102, 103, 105, 105, 107, 108, 109, 111, 112, 113,
+        114, 116, 117, 118, 119, 120, 122, 123, 124, 126,
+        126, 128, 129, 130, 132, 132, 134, 134, 136, 138,
+        138, 140, 140, 142, 144, 144, 146, 146, 148, 149,
+        150, 151, 152, 154, 155, 156, 157, 158, 159, 161,
+        162, 163, 164, 165, 166, 167, 169, 170, 171, 172,
+        173, 175, 175, 177, 177, 179, 180, 181, 184, 184};
 
 // -------------------- 图像处理基本参数 --------------------
-extern volatile int Island_State;  // 环岛状态（外部引用）
-extern volatile int Ramp_Flag;     // 坡道标志（外部引用）
+extern volatile int Island_State; // 环岛状态（外部引用）
+extern volatile int Ramp_Flag;    // 坡道标志（外部引用）
 
-int turn_start = 50;  // 转弯检测起始行
-int turn_end = 53;    // 转弯检测结束行
+int turn_start = 50; // 转弯检测起始行
+int turn_end = 53;   // 转弯检测结束行
 
-int threshold;         // 全局二值化阈值
+// 图像误差采样行配置（可通过菜单调参）
+uint32 image_err_row1 = IMAGE_ERR_ROW1; // 误差采样行1
+uint32 image_err_row2 = IMAGE_ERR_ROW2; // 误差采样行2
+uint32 image_err_row3 = IMAGE_ERR_ROW3; // 误差采样行3
+uint32 image_error_mode = 1;            // 误差计算模式：0=原版单行，1=智能三行（默认使用新算法）
+
+int threshold;          // 全局二值化阈值
 uint8 image_proess = 0; // 图像处理完成标志
 
 //============================================================
@@ -104,8 +109,8 @@ uint8 image_proess = 0; // 图像处理完成标志
 void Longest_White_Column()
 {
     int i, j;
-    int start_column = 35;
-    int end_column = MT9V03X_W - 35;
+    int start_column = 20;
+    int end_column = MT9V03X_W - 20;
     int left_border = 0, right_border = 0;
 
     // 初始化变量
@@ -452,24 +457,24 @@ void Find_Up_Point(int start, int end)
     {
         // 左上拐点检测：下方平稳，上方向内突变
         if (Left_Up_Find == 0 &&
-            abs(Left_Line[i] - Left_Line[i - 1]) <= 5 &&
-            abs(Left_Line[i - 1] - Left_Line[i - 2]) <= 5 &&
-            abs(Left_Line[i - 2] - Left_Line[i - 3]) <= 5 &&
-            (Left_Line[i] - Left_Line[i + 2]) >= 8 &&
-            (Left_Line[i] - Left_Line[i + 3]) >= 15 &&
-            (Left_Line[i] - Left_Line[i + 4]) >= 15)
+            abs(Left_Line[i] - Left_Line[i - 1]) <= 7 &&
+            abs(Left_Line[i - 1] - Left_Line[i - 2]) <= 7 &&
+            abs(Left_Line[i - 2] - Left_Line[i - 3]) <= 7 &&
+            (Left_Line[i] - Left_Line[i + 2]) >= 6 &&
+            (Left_Line[i] - Left_Line[i + 3]) >= 13 &&
+            (Left_Line[i] - Left_Line[i + 4]) >= 13)
         {
             Left_Up_Find = i;
         }
 
         // 右上拐点检测：下方平稳，上方向内突变
         if (Right_Up_Find == 0 &&
-            abs(Right_Line[i] - Right_Line[i - 1]) <= 5 &&
-            abs(Right_Line[i - 1] - Right_Line[i - 2]) <= 5 &&
-            abs(Right_Line[i - 2] - Right_Line[i - 3]) <= 5 &&
-            (Right_Line[i] - Right_Line[i + 2]) <= -8 &&
-            (Right_Line[i] - Right_Line[i + 3]) <= -15 &&
-            (Right_Line[i] - Right_Line[i + 4]) <= -15)
+            abs(Right_Line[i] - Right_Line[i - 1]) <= 7 &&
+            abs(Right_Line[i - 1] - Right_Line[i - 2]) <= 7 &&
+            abs(Right_Line[i - 2] - Right_Line[i - 3]) <= 7 &&
+            (Right_Line[i] - Right_Line[i + 2]) <= -6 &&
+            (Right_Line[i] - Right_Line[i + 3]) <= -13 &&
+            (Right_Line[i] - Right_Line[i + 4]) <= -13)
         {
             Right_Up_Find = i;
         }
@@ -884,8 +889,8 @@ void Ramp_Detect(void)
 
 /**
  * @brief 计算图像中线偏差的平均值
- * @param start_point 起始行（从图像底部算起）
- * @param end_point 结束行
+ * @param start_point 起始行（数组索引）
+ * @param end_point 结束行（数组索引）
  * @return 中线偏差平均值（正值表示偏右，负值表示偏左）
  * @note 用于转向PID控制的P环输入
  */
@@ -899,11 +904,18 @@ float err_sum_average(uint8 start_point, uint8 end_point)
         start_point = t;
     }
 
-    // 边界检查
-    if (start_point < MT9V03X_H - Search_Stop_Line)
-        start_point = MT9V03X_H - Search_Stop_Line - 1;
-    if (end_point < MT9V03X_H - Search_Stop_Line)
-        end_point = MT9V03X_H - Search_Stop_Line - 2;
+    // 计算有效采样范围的最小行号（数组索引）
+    uint32 min_valid_row = (Search_Stop_Line > 0) ? (MT9V03X_H - Search_Stop_Line) : 0;
+
+    // 边界检查：确保采样行在搜索范围内
+    if (start_point < min_valid_row)
+        start_point = (uint8)min_valid_row;
+    if (end_point < min_valid_row)
+        end_point = (uint8)min_valid_row;
+
+    // 确保范围有效
+    if (start_point > end_point)
+        return 0.0f;
 
     // 计算偏差累加值
     float err = 0;
@@ -915,6 +927,59 @@ float err_sum_average(uint8 start_point, uint8 end_point)
     // 计算平均偏差
     err = err / (end_point - start_point + 1);
     return err;
+}
+
+/**
+ * @brief 智能图像误差计算（自动跳过丢线行）
+ * @return 中线偏差平均值（正值表示偏右，负值表示偏左）
+ * @note 从三个采样行中选择未丢线的行进行计算
+ *       如果三行都丢线，返回0
+ */
+float image_error_smart(void)
+{
+    float err_sum = 0.0f;
+    uint8 valid_count = 0;
+
+    // 计算有效采样范围的最小行号（数组索引）
+    uint32 min_valid_row = (Search_Stop_Line > 0) ? (MT9V03X_H - Search_Stop_Line) : 0;
+
+    // 存储三个采样行号
+    uint32 sample_rows[3] = {image_err_row1, image_err_row2, image_err_row3};
+
+    // 遍历三个采样行
+    for (uint8 i = 0; i < 3; i++)
+    {
+        uint32 row = sample_rows[i];
+
+        // 边界检查：确保行号在图像范围内
+        if (row >= MT9V03X_H)
+            continue;
+
+        // 如果采样行超出搜索范围（行号小于最小有效行），调整到搜索停止行
+        if (row < min_valid_row)
+            row = min_valid_row;
+
+        // 检查该行是否丢线（左右边界都要正常）
+        if (Left_Lost_Flag[row] == 0 && Right_Lost_Flag[row] == 0)
+        {
+            // 计算该行的中线偏差
+            int mid_line = (Left_Line[row] + Right_Line[row]) >> 1;
+            int err = MT9V03X_W / 2 - mid_line;
+
+            err_sum += err;
+            valid_count++;
+        }
+    }
+
+    // 如果有有效行，返回平均误差；否则返回0
+    if (valid_count > 0)
+    {
+        return err_sum / valid_count;
+    }
+    else
+    {
+        return 0.0f;
+    }
 }
 
 /**
@@ -967,12 +1032,38 @@ void image_process(void)
     threshold = otsu_get_threshold((uint8 *)image_copy, MT9V03X_W, MT9V03X_H);
     applyThreshold(image_copy, binaryImage, threshold);
 
+#if WHITE_RECT_ENABLE
+    // 0.1 在图像底部中央绘制白色矩形（屏蔽车体干扰）
+    int rect_center_x = MT9V03X_W / 2;                     // 矩形中心X坐标
+    int rect_left = rect_center_x - WHITE_RECT_WIDTH / 2;  // 矩形左边界
+    int rect_right = rect_center_x + WHITE_RECT_WIDTH / 2; // 矩形右边界
+    int rect_top = MT9V03X_H - WHITE_RECT_HEIGHT;          // 矩形上边界
+    int rect_bottom = MT9V03X_H - 1;                       // 矩形下边界
+
+    // 边界限制
+    if (rect_left < 0)
+        rect_left = 0;
+    if (rect_right >= MT9V03X_W)
+        rect_right = MT9V03X_W - 1;
+    if (rect_top < 0)
+        rect_top = 0;
+
+    // 填充白色矩形
+    for (int i = rect_top; i <= rect_bottom; i++)
+    {
+        for (int j = rect_left; j <= rect_right; j++)
+        {
+            binaryImage[i][j] = IMG_WHITE;
+        }
+    }
+#endif
+
     // 1. 双边巡线 - 提取左右边界
     Longest_White_Column();
 
     // 2. 赛道元素检测
-    Cross_Detect();  // 十字路口检测
-    Ramp_Detect();   // 坡道检测
+    Cross_Detect(); // 十字路口检测
+    // Ramp_Detect();   // 坡道检测
 
     // 3. 设置图像处理完成标志
     image_proess = 1;
