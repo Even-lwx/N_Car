@@ -57,8 +57,8 @@ uint32 steer_sample_end = 60;     // 图像采样结束行
 uint32 steer_enable = 1;          // 转向环使能（0=禁用，1=启用）
 
 // 行进轮速度环控制参数
-uint32 drive_speed_enable = 1;        // 行进轮速度环使能（0=开环，1=闭环PID）
-float drive_open_loop_output = 0.0f;  // 行进轮开环输出值（PWM值，-10000~10000）
+uint32 drive_speed_enable = 1;       // 行进轮速度环使能（0=开环，1=闭环PID）
+float drive_open_loop_output = 0.0f; // 行进轮开环输出值（PWM值，-10000~10000）
 
 // 目标值
 float target_gyro_rate = 0.0f;    // 目标角速度
@@ -205,8 +205,8 @@ void control(void)
 
     motor_protection_update();
 
-    // 角度在±200范围内时清空积分项，重新开始积分
-    // if (imu_data.pitch >= -200.0f && imu_data.pitch <= 200.0f)
+    //角度在±5范围内时清空积分项，重新开始积分
+    // if (imu_data.pitch >= -5.0f && imu_data.pitch <= 5.0f)
     // {
     //     gyro_pid.integral = 0.0f;
     //     angle_pid.integral = 0.0f;
@@ -460,7 +460,7 @@ void steer_pid_control(void)
     {
         // 转向环禁用时，舵机保持中点角度
         current_servo_angle = servo_motor_duty;
-        current_image_error = 0.0f;  // 禁用时图像误差也为0
+        current_image_error = 0.0f; // 禁用时图像误差也为0
         servo_set_angle(servo_motor_duty);
         return;
     }
