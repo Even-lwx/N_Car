@@ -69,8 +69,8 @@ void buzzer_toggle(void);
 
 /**
  * @brief 查询蜂鸣器是否正在鸣叫
- * @return true=正在鸣叫, false=已停止
+ * @return 1=正在鸣叫, 0=已停止
  */
-bool buzzer_is_active(void);
+uint8 buzzer_is_active(void);
 
 #endif // BUZZER_H

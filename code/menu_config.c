@@ -15,6 +15,7 @@
 #include "menu_config.h"
 #include "zf_common_headfile.h"
 #include "voltage.h"
+#include "imu_calibration_improved.h"  // 新增：使用改进版校准API
 
 /**************** 外部声明（来自menu.c的内核函数） ****************/
 extern void ips_clear(void);
@@ -24,6 +25,7 @@ extern void show_float(uint16 x, uint16 y, float value, uint8 num, uint8 pointnu
 extern uint8 Key_Scan(void);
 extern uint8 Param_Save_All(void); // 返回值为 uint8
 extern void buzzer_beep(uint8 times, uint16 on_time, uint16 off_time);
+extern void buzzer_update(void);   // 蜂鸣器更新函数（用于在阻塞循环中调用）
 extern void servo_set_angle(float angle);
 extern void motor_reset_protection(void);
 extern void momentum_wheel_control(int16 pwm_value); // 参数类型为 int16
@@ -353,7 +355,7 @@ Page page_steer_pid = {
 //============================================================
 // 5. IMU菜单
 //============================================================
-// 4.1 IMU参数
+// 5.1 IMU参数
 int16 gyro_offset_step[] = {1, 10, 100};
 
 CustomData imu_data_params[] = {
@@ -374,7 +376,33 @@ Page page_imu_params = {
     .scroll_offset = 0,
 };
 
-// 4.2 陀螺仪校准功能
+// 5.2 加速度计校准参数页面
+float acc_bias_step[] = {0.001f, 0.01f, 0.1f};
+float acc_scale_step[] = {0.001f, 0.01f, 0.1f};
+
+CustomData acc_calib_params[] = {
+    {&g_acc_calib_params.bias_x, data_float_show, "ACC X Bias", acc_bias_step, 3, 0, 2, 4},
+    {&g_acc_calib_params.bias_y, data_float_show, "ACC Y Bias", acc_bias_step, 3, 0, 2, 4},
+    {&g_acc_calib_params.bias_z, data_float_show, "ACC Z Bias", acc_bias_step, 3, 0, 2, 4},
+    {&g_acc_calib_params.scale_x, data_float_show, "ACC X Scale", acc_scale_step, 3, 0, 1, 4},
+    {&g_acc_calib_params.scale_y, data_float_show, "ACC Y Scale", acc_scale_step, 3, 0, 1, 4},
+    {&g_acc_calib_params.scale_z, data_float_show, "ACC Z Scale", acc_scale_step, 3, 0, 1, 4},
+    {&g_acc_calib_params.calibrated, data_uint32_show, "Calibrated", protect_enable_step, 1, 0, 1, 0},
+};
+
+Page page_acc_params = {
+    .name = "ACC Calib Params",
+    .data = acc_calib_params,
+    .len = 7,
+    .stage = Menu,
+    .back = NULL, // 在 Menu_Config_Init() 中设置
+    .enter = {NULL},
+    .content = {NULL},
+    .order = 0,
+    .scroll_offset = 0,
+};
+
+// 5.3 陀螺仪校准功能
 void gyro_calibration_wrapper(void)
 {
     ips_clear();
@@ -411,10 +439,11 @@ void gyro_calibration_wrapper(void)
     show_string(0, 8, "Z Offset:");
     show_int(8, 8, gyro_z_offset, 5);
     show_string(0, 11, "Press BACK");
+    system_delay_ms(4000);
 }
 
 Page page_gyro_calibration = {
-    .name = "Calibrate",
+    .name = "Gyro Calibrate",
     .data = NULL,
     .len = 0,
     .stage = Funtion,
@@ -425,14 +454,297 @@ Page page_gyro_calibration = {
     .scroll_offset = 0,
 };
 
-// 4.3 IMU主菜单
+// 5.4 加速度计校准功能
+void acc_calibration_wrapper(void)
+{
+    ips_clear();
+    show_string(0, 0, "ACC Calibration");
+
+    // 检查IMU初始化状态
+    if (!imu_data.is_initialized)
+    {
+        show_string(0, 4, "IMU Not Init!");
+        show_string(0, 8, "Press BACK");
+        buzzer_beep(3, 50, 50); // 3声短促蜂鸣表示错误
+        while (Key_Scan() != KEY_BACK)
+        {
+            buzzer_update();
+            system_delay_ms(20);
+        }
+        return;
+    }
+
+    // 显示校准前状态
+    show_string(0, 2, "Status:");
+    if (g_acc_calib_params.calibrated)
+    {
+        show_string_color(8, 2, "Calibrated", RGB565_GREEN);
+    }
+    else
+    {
+        show_string_color(8, 2, "Not Calib", RGB565_RED);
+    }
+
+    // 显示说明
+    show_string(0, 4, "Rotate device in");
+    show_string(0, 6, "6 directions:");
+    show_string(0, 8, "+X -X +Y -Y");
+    show_string(0, 10, "+Z -Z");
+    show_string(0, 12, "OK:Start");
+    show_string(0, 14, "BACK:Cancel");
+
+    buzzer_beep(1, 50, 100);
+
+    // 等待用户确认
+    while (1)
+    {
+        buzzer_update();
+        system_delay_ms(20);
+
+        uint8 key = Key_Scan();
+        if (key == KEY_OK)
+        {
+            break; // 开始校准
+        }
+        else if (key == KEY_BACK)
+        {
+            return; // 取消校准
+        }
+    }
+
+    // 启动手动校准模式
+    uint8 result = imu_calibrate_acc_manual();
+
+    if (!result)
+    {
+        ips_clear();
+        show_string(0, 0, "ACC Calibration");
+        show_string_color(0, 6, "Start Failed!", RGB565_RED);
+        show_string(0, 10, "Press BACK");
+        while (Key_Scan() != KEY_BACK)
+        {
+            buzzer_update();
+            system_delay_ms(20);
+        }
+        return;
+    }
+
+    buzzer_beep(2, 100, 100); // 2声蜂鸣表示开始
+
+    // ========== 进入采样循环 ==========
+    while (1)
+    {
+        ips_clear();
+        show_string(0, 0, "ACC Calibration");
+        show_string(0, 2, "Rotate to side");
+        show_string(0, 4, "and hold still");
+
+        // 显示当前进度
+        show_string(0, 6, "Sample:");
+        show_int(8, 6, g_manual_calib_state.sample_count, 2);
+        show_string(10, 6, "/30");
+
+        // 显示方向覆盖
+        show_string(0, 8, "Covered:");
+        show_int(10, 8, g_manual_calib_state.coverage.count, 1);
+        show_string(11, 8, "/6");
+
+        // 显示缺失方向
+        if (g_manual_calib_state.coverage.count < 6)
+        {
+            show_string(0, 10, "Need:");
+            uint8 line_offset = 0;
+            if (!g_manual_calib_state.coverage.covered_px)
+            {
+                show_string(6 + line_offset * 3, 10, "+X");
+                line_offset++;
+            }
+            if (!g_manual_calib_state.coverage.covered_nx)
+            {
+                show_string(6 + line_offset * 3, 10, "-X");
+                line_offset++;
+            }
+            if (!g_manual_calib_state.coverage.covered_py)
+            {
+                show_string(6 + line_offset * 3, 10, "+Y");
+                line_offset++;
+            }
+            if (!g_manual_calib_state.coverage.covered_ny)
+            {
+                show_string(6 + line_offset * 3, 10, "-Y");
+                line_offset++;
+            }
+            if (!g_manual_calib_state.coverage.covered_pz)
+            {
+                show_string(6 + line_offset * 3, 10, "+Z");
+                line_offset++;
+            }
+            if (!g_manual_calib_state.coverage.covered_nz)
+            {
+                show_string(6 + line_offset * 3, 10, "-Z");
+                line_offset++;
+            }
+        }
+
+        show_string(0, 12, "OK:Sample");
+
+        // 等待按键
+        while (1)
+        {
+            uint8 key = Key_Scan();
+            if (key == KEY_OK)
+            {
+                // 采集当前方向
+                buzzer_beep(1, 50, 50);
+                show_string(0, 2, "Sampling...    ");
+                show_string(0, 4, "              ");
+
+                imu_calibrate_acc_confirm_sample();
+
+                buzzer_beep(1, 100, 50);
+                system_delay_ms(500); // 显示采样完成提示
+                break;
+            }
+            else if (key == KEY_BACK)
+            {
+                // 完成校准
+                goto calibration_finish;
+            }
+            system_delay_ms(10);
+        }
+    }
+
+calibration_finish:
+    // 完成校准并计算参数
+    ips_clear();
+    show_string(0, 0, "ACC Calibration");
+    show_string(0, 6, "Computing...");
+
+    result = imu_calibrate_acc_manual_finish();
+
+    // 显示结果
+    ips_clear();
+    show_string(0, 0, "ACC Calibration");
+
+    if (result && g_acc_calib_params.calibrated)
+    {
+        show_string_color(0, 2, "Success!", RGB565_GREEN);
+
+        // 显示校准结果
+        show_string(0, 4, "Bias:");
+        show_float(7, 4, g_acc_calib_params.bias_x, 1, 3);
+        show_float(13, 4, g_acc_calib_params.bias_y, 1, 3);
+        show_float(19, 4, g_acc_calib_params.bias_z, 1, 3);
+
+        show_string(0, 6, "Scale:");
+        show_float(7, 6, g_acc_calib_params.scale_x, 1, 3);
+        show_float(13, 6, g_acc_calib_params.scale_y, 1, 3);
+        show_float(19, 6, g_acc_calib_params.scale_z, 1, 3);
+
+        // 保存参数到Flash
+        show_string(0, 8, "Saving...");
+        Param_Save_All();
+        show_string_color(0, 8, "Saved!   ", RGB565_GREEN);
+
+        buzzer_beep(3, 100, 100); // 3声蜂鸣表示成功
+    }
+    else
+    {
+        show_string_color(0, 2, "Failed!", RGB565_RED);
+        show_string(0, 4, "Check:");
+        show_string(0, 6, "-6 directions");
+        show_string(0, 8, "-Enough samples");
+
+        buzzer_beep(5, 50, 50); // 5声短促蜂鸣表示失败
+    }
+
+    show_string(0, 12, "Press BACK");
+
+    // 等待返回
+    while (Key_Scan() != KEY_BACK)
+    {
+        buzzer_update();
+        system_delay_ms(20);
+    }
+}
+
+Page page_acc_calibration = {
+    .name = "ACC Calibrate",
+    .data = NULL,
+    .len = 0,
+    .stage = Funtion,
+    .back = NULL, // 在 Menu_Config_Init() 中设置
+    .enter = {NULL},
+    .content = {.function = acc_calibration_wrapper},
+    .order = 0,
+    .scroll_offset = 0,
+};
+
+// 5.5 加速度计校准重置功能
+void acc_calibration_reset_wrapper(void)
+{
+    ips_clear();
+    show_string(0, 0, "Reset ACC Calib");
+    show_string(0, 4, "Confirm reset?");
+    show_string(0, 7, "OK: Yes");
+    show_string(0, 9, "BACK: No");
+
+    buzzer_beep(1, 50, 100);
+
+    // 等待用户确认
+    while (1)
+    {
+        uint8 key = Key_Scan();
+        if (key == KEY_OK)
+        {
+            // 重置校准参数
+            imu_reset_acc_calibration();
+
+            // 保存到Flash
+            Param_Save_All();
+
+            ips_clear();
+            show_string(0, 0, "Reset ACC Calib");
+            show_string_color(0, 5, "Reset Done!", RGB565_GREEN);
+            show_string(0, 9, "Press BACK");
+
+            buzzer_beep(2, 100, 100);
+
+            while (Key_Scan() != KEY_BACK)
+            {
+                buzzer_update();
+                system_delay_ms(20);
+            }
+            return;
+        }
+        else if (key == KEY_BACK)
+        {
+            return; // 取消
+        }
+        system_delay_ms(10);
+    }
+}
+
+Page page_acc_reset = {
+    .name = "Reset Calib",
+    .data = NULL,
+    .len = 0,
+    .stage = Funtion,
+    .back = NULL, // 在 Menu_Config_Init() 中设置
+    .enter = {NULL},
+    .content = {.function = acc_calibration_reset_wrapper},
+    .order = 0,
+    .scroll_offset = 0,
+};
+
+// 5.6 IMU主菜单
 Page page_imu = {
     .name = "IMU",
     .data = NULL,
-    .len = 2,
+    .len = 5, // 更新子菜单数量
     .stage = Menu,
     .back = NULL, // 在 Menu_Config_Init() 中设置
-    .enter = {&page_imu_params, &page_gyro_calibration},
+    .enter = {&page_imu_params, &page_gyro_calibration, &page_acc_params, &page_acc_calibration, &page_acc_reset},
     .content = {NULL},
     .order = 0,
     .scroll_offset = 0,
@@ -775,4 +1087,7 @@ void Menu_Config_Init(void)
     // 设置IMU子页面的父指针
     page_imu_params.back = &page_imu;
     page_gyro_calibration.back = &page_imu;
+    page_acc_params.back = &page_imu;
+    page_acc_calibration.back = &page_imu;
+    page_acc_reset.back = &page_imu;
 }
