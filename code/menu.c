@@ -23,6 +23,9 @@ extern Page page_cargo; // Cargo运行模式页面（用于特殊退出处理）
 Page *Now_Menu = NULL;         // 当前菜单页面指针
 static uint8 need_refresh = 1; // 屏幕刷新标志
 
+// 全局按键事件标志（由中断设置，功能函数读取）
+volatile uint8 g_key_event = KEY_NONE;
+
 /**************** 按键扫描相关函数 ****************/
 
 /**
@@ -753,13 +756,12 @@ void menu_update(void)
         need_refresh = 1;
     }
 
-    // 扫描按键
-    uint8 key = Key_Scan();
-
-    // 如果有按键按下，处理按键操作
-    if (key != KEY_NONE)
+    // 检查全局按键事件标志（由中断设置）
+    if (g_key_event != KEY_NONE)
     {
-        Key_operation(key);
+        uint8 key = g_key_event; // 读取按键事件
+        g_key_event = KEY_NONE;  // 立即清除标志
+        Key_operation(key);      // 处理按键操作
     }
 
     // 显示菜单

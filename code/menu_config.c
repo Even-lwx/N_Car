@@ -25,7 +25,6 @@ extern void show_float(uint16 x, uint16 y, float value, uint8 num, uint8 pointnu
 extern uint8 Key_Scan(void);
 extern uint8 Param_Save_All(void); // 返回值为 uint8
 extern void buzzer_beep(uint8 times, uint16 on_time, uint16 off_time);
-extern void buzzer_update(void);   // 蜂鸣器更新函数（用于在阻塞循环中调用）
 extern void servo_set_angle(float angle);
 extern void motor_reset_protection(void);
 extern void momentum_wheel_control(int16 pwm_value); // 参数类型为 int16
@@ -466,11 +465,14 @@ void acc_calibration_wrapper(void)
         show_string(0, 4, "IMU Not Init!");
         show_string(0, 8, "Press BACK");
         buzzer_beep(3, 50, 50); // 3声短促蜂鸣表示错误
-        while (Key_Scan() != KEY_BACK)
+
+        // 使用全局标志位，非阻塞等待BACK键
+        g_key_event = KEY_NONE;
+        while (g_key_event != KEY_BACK)
         {
-            buzzer_update();
             system_delay_ms(20);
         }
+        g_key_event = KEY_NONE;
         return;
     }
 
@@ -495,22 +497,19 @@ void acc_calibration_wrapper(void)
 
     buzzer_beep(1, 50, 100);
 
-    // 等待用户确认
-    while (1)
+    // 等待用户确认（使用全局标志位，非阻塞）
+    g_key_event = KEY_NONE;
+    while (g_key_event != KEY_OK && g_key_event != KEY_BACK)
     {
-        buzzer_update();
         system_delay_ms(20);
-
-        uint8 key = Key_Scan();
-        if (key == KEY_OK)
-        {
-            break; // 开始校准
-        }
-        else if (key == KEY_BACK)
-        {
-            return; // 取消校准
-        }
     }
+
+    if (g_key_event == KEY_BACK)
+    {
+        g_key_event = KEY_NONE;
+        return; // 取消校准
+    }
+    g_key_event = KEY_NONE;
 
     // 启动手动校准模式
     uint8 result = imu_calibrate_acc_manual();
@@ -521,11 +520,14 @@ void acc_calibration_wrapper(void)
         show_string(0, 0, "ACC Calibration");
         show_string_color(0, 6, "Start Failed!", RGB565_RED);
         show_string(0, 10, "Press BACK");
-        while (Key_Scan() != KEY_BACK)
+
+        // 使用全局标志位，非阻塞等待BACK键
+        g_key_event = KEY_NONE;
+        while (g_key_event != KEY_BACK)
         {
-            buzzer_update();
             system_delay_ms(20);
         }
+        g_key_event = KEY_NONE;
         return;
     }
 
@@ -588,30 +590,29 @@ void acc_calibration_wrapper(void)
 
         show_string(0, 12, "OK:Sample");
 
-        // 等待按键
-        while (1)
+        // 等待按键（使用全局标志位，非阻塞）
+        g_key_event = KEY_NONE;
+        while (g_key_event != KEY_OK && g_key_event != KEY_BACK)
         {
-            uint8 key = Key_Scan();
-            if (key == KEY_OK)
-            {
-                // 采集当前方向
-                buzzer_beep(1, 50, 50);
-                show_string(0, 2, "Sampling...    ");
-                show_string(0, 4, "              ");
-
-                imu_calibrate_acc_confirm_sample();
-
-                buzzer_beep(1, 100, 50);
-                system_delay_ms(500); // 显示采样完成提示
-                break;
-            }
-            else if (key == KEY_BACK)
-            {
-                // 完成校准
-                goto calibration_finish;
-            }
-            system_delay_ms(10);
+            system_delay_ms(20);
         }
+
+        if (g_key_event == KEY_BACK)
+        {
+            g_key_event = KEY_NONE;
+            goto calibration_finish; // 完成校准
+        }
+
+        // 执行采样 (g_key_event == KEY_OK)
+        g_key_event = KEY_NONE;
+        buzzer_beep(1, 50, 50);
+        show_string(0, 2, "Sampling...    ");
+        show_string(0, 4, "              ");
+
+        imu_calibrate_acc_confirm_sample();
+
+        buzzer_beep(1, 100, 50);
+        system_delay_ms(500); // 显示采样完成提示
     }
 
 calibration_finish:
@@ -660,12 +661,13 @@ calibration_finish:
 
     show_string(0, 12, "Press BACK");
 
-    // 等待返回
-    while (Key_Scan() != KEY_BACK)
+    // 等待返回（使用全局标志位，非阻塞）
+    g_key_event = KEY_NONE;
+    while (g_key_event != KEY_BACK)
     {
-        buzzer_update();
         system_delay_ms(20);
     }
+    g_key_event = KEY_NONE;
 }
 
 Page page_acc_calibration = {
@@ -691,37 +693,43 @@ void acc_calibration_reset_wrapper(void)
 
     buzzer_beep(1, 50, 100);
 
-    // 等待用户确认
-    while (1)
+    // 等待用户确认（使用全局标志位，非阻塞）
+    g_key_event = KEY_NONE;
+    while (g_key_event != KEY_OK && g_key_event != KEY_BACK)
     {
-        uint8 key = Key_Scan();
-        if (key == KEY_OK)
+        system_delay_ms(20);
+    }
+
+    if (g_key_event == KEY_OK)
+    {
+        g_key_event = KEY_NONE;
+
+        // 重置校准参数
+        imu_reset_acc_calibration();
+
+        // 保存到Flash
+        Param_Save_All();
+
+        ips_clear();
+        show_string(0, 0, "Reset ACC Calib");
+        show_string_color(0, 5, "Reset Done!", RGB565_GREEN);
+        show_string(0, 9, "Press BACK");
+
+        buzzer_beep(2, 100, 100);
+
+        // 等待返回（使用全局标志位，非阻塞）
+        g_key_event = KEY_NONE;
+        while (g_key_event != KEY_BACK)
         {
-            // 重置校准参数
-            imu_reset_acc_calibration();
-
-            // 保存到Flash
-            Param_Save_All();
-
-            ips_clear();
-            show_string(0, 0, "Reset ACC Calib");
-            show_string_color(0, 5, "Reset Done!", RGB565_GREEN);
-            show_string(0, 9, "Press BACK");
-
-            buzzer_beep(2, 100, 100);
-
-            while (Key_Scan() != KEY_BACK)
-            {
-                buzzer_update();
-                system_delay_ms(20);
-            }
-            return;
+            system_delay_ms(20);
         }
-        else if (key == KEY_BACK)
-        {
-            return; // 取消
-        }
-        system_delay_ms(10);
+        g_key_event = KEY_NONE;
+        return;
+    }
+    else // KEY_BACK
+    {
+        g_key_event = KEY_NONE;
+        return; // 取消
     }
 }
 
@@ -807,7 +815,9 @@ Page page_cargo = {
 void debug_monitor_mode(void)
 {
     ips_clear();
-    while (1)
+    g_key_event = KEY_NONE; // 清除旧按键事件
+
+    while (g_key_event != KEY_BACK)
     {
         show_string(0, 0, "Debug Monitor");
 
@@ -825,11 +835,9 @@ void debug_monitor_mode(void)
 
         show_string(0, 12, "Press BACK");
 
-        if (Key_Scan() == KEY_BACK)
-        {
-            break;
-        }
+        system_delay_ms(100); // 减少刷新频率
     }
+    g_key_event = KEY_NONE;
 }
 
 Page page_debug = {
@@ -850,7 +858,9 @@ Page page_debug = {
 void voltage_monitor_mode(void)
 {
     ips_clear();
-    while (1)
+    g_key_event = KEY_NONE; // 清除旧按键事件
+
+    while (g_key_event != KEY_BACK)
     {
         show_string(0, 0, "Voltage Monitor");
 
@@ -877,14 +887,9 @@ void voltage_monitor_mode(void)
 
         show_string(0, 12, "Press BACK");
 
-        // 检测返回键
-        if (Key_Scan() == KEY_BACK)
-        {
-            break;
-        }
-
         system_delay_ms(100); // 每100ms刷新一次
     }
+    g_key_event = KEY_NONE;
 }
 
 Page page_voltage = {
@@ -905,11 +910,11 @@ Page page_voltage = {
 void camera_display_mode(void)
 {
     uint8 display_mode = 0; // 显示模式：0=灰度图，1=二值化图（使用image_process处理后的数组）
-    uint8 key = KEY_NONE;
 
     ips_clear();
+    g_key_event = KEY_NONE; // 清除旧按键事件
 
-    while (1)
+    while (g_key_event != KEY_BACK)
     {
         // 调用图像处理函数（包含二值化和白色矩形绘制）
         image_process();
@@ -1008,24 +1013,19 @@ void camera_display_mode(void)
             show_int(27, 0, threshold, 3);
         }
 
-        // 扫描按键
-        key = Key_Scan();
-
-        // 检测OK键 - 切换显示模式
-        if (key == KEY_OK)
+        // 检查全局按键事件标志
+        if (g_key_event == KEY_OK)
         {
-            display_mode = !display_mode; // 在0和1之间切换
-            system_delay_ms(200);         // 防止按键连续触发
-        }
-        // 检测返回键 - 退出
-        else if (key == KEY_BACK)
-        {
-            ips_clear(); // 退出前清空屏幕，避免和菜单渲染冲突
-            break;
+            g_key_event = KEY_NONE;           // 立即清除标志
+            display_mode = !display_mode;     // 在0和1之间切换
+            system_delay_ms(200);             // 防止按键连续触发
         }
 
         system_delay_ms(50); // 适当延迟，避免刷新过快
     }
+
+    ips_clear(); // 退出前清空屏幕，避免和菜单渲染冲突
+    g_key_event = KEY_NONE;
 }
 
 Page page_camera = {

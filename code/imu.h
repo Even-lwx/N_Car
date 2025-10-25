@@ -44,6 +44,15 @@
 // *************************** 宏定义 ***************************
 #define IMU_UPDATE_FREQ (500) // IMU数据更新频率 (Hz)，实际为2ms周期=500Hz
 
+// *** 加速度计校准算法配置 ***
+#define ACC_CAL_MAX_SAMPLES  500   // 最大样本数（推荐300-500，越多精度越高）
+#define ACC_CAL_MIN_SAMPLES  100   // 最小样本数（不建议低于100）
+
+// *** 静止检测配置 ***
+#define ACC_CAL_STILLNESS_THRESHOLD  0.05f  // 静止检测阈值（g），加速度变化小于此值认为静止
+#define ACC_CAL_STILLNESS_SAMPLES    10     // 静止段内连续采样数（每段采集10个样本取平均）
+#define ACC_CAL_MIN_STABLE_TIME_MS   500    // 每个方向最小稳定时间（毫秒）
+
 // *************************** 枚举类型定义 ***************************
 
 /**
@@ -107,6 +116,15 @@ extern int16 gyro_x_offset; // X轴零偏
 extern int16 gyro_y_offset; // Y轴零偏
 extern int16 gyro_z_offset; // Z轴零偏
 
+// ---------- 加速度计校准数据 ----------
+extern float acc_x_bias;   // X轴零偏（单位：g）
+extern float acc_y_bias;   // Y轴零偏（单位：g）
+extern float acc_z_bias;   // Z轴零偏（单位：g）
+extern float acc_x_scale;  // X轴缩放因子
+extern float acc_y_scale;  // Y轴缩放因子
+extern float acc_z_scale;  // Z轴缩放因子
+extern uint8 acc_calibrated; // 加速度计校准完成标志 (0=未校准, 1=已校准)
+
 // *************************** 函数声明 ***************************
 
 /**
@@ -138,6 +156,26 @@ void imu_get_data(void);
  * @example     imu_calibrate_gyro(2000);
  */
 void imu_calibrate_gyro(uint16 sample_count);
+
+/**
+ * @brief       加速度计校准函数（改进版 - 带静止检测）
+ * @param       sample_count    目标样本数（建议200-500）
+ * @param       timeout_ms      总超时时间（毫秒）
+ * @return      uint8           校准结果（1=成功, 0=失败）
+ * @note        **必须在静止状态下校准，会自动过滤运动状态的数据**
+ *              算法特性:
+ *              - 自动静止检测（加速度变化 < 0.05g）
+ *              - 高频连续采样（500Hz数据更新，每个静止段采10个样本平均）
+ *              - 六方向覆盖度检测（自动检查是否覆盖 ±X/±Y/±Z）
+ *              - 椭球拟合算法解出6个参数（bias和scale）
+ *
+ *              使用方法:
+ *              1. 启动校准后，缓慢旋转IMU到6个主要方向
+ *              2. 在每个方向上**静止2-3秒**（系统自动检测静止并采样）
+ *              3. 等待提示完成或检查方向覆盖度
+ * @example     uint8 result = imu_calibrate_acc(300, 60000);
+ */
+uint8 imu_calibrate_acc(uint16 sample_count, uint32 timeout_ms);
 
 /**
  * @brief       获取横滚角

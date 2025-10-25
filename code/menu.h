@@ -26,6 +26,15 @@
 #define KEY_OK 3
 #define KEY_BACK 4
 
+/**************** 全局按键事件标志 ****************/
+/**
+ * @brief 全局按键事件标志（由中断设置，功能函数读取）
+ * @note 使用 volatile 确保编译器不优化此变量的访问
+ *       中断中设置，主循环中读取和清除
+ *       避免主循环中直接调用 Key_Scan() 造成的双重扫描问题
+ */
+extern volatile uint8 g_key_event;
+
 /**************** 长按配置 ****************/
 #define LONG_PRESS_CNT 30 // 长按阈值：连续检测15次认为长按（约300ms）
 #define REPEAT_INTERVAL 3 // 长按后每3次循环触发一次（约60ms间隔）

@@ -17,6 +17,7 @@ extern Page page_angle_pid;
 extern Page page_speed_pid;
 extern Page page_drive_speed_pid;
 extern Page page_imu_params;
+extern Page page_acc_params;      // 加速度计校准参数页面
 extern Page page_delayed_stop;    // 延迟停车参数页面
 extern Page page_output_smooth;   // 输出平滑参数页面
 extern Page page_motor_protect;   // 电机保护参数页面
@@ -33,6 +34,7 @@ static Page *param_pages[] = {
     &page_speed_pid,
     &page_drive_speed_pid,
     &page_imu_params,
+    &page_acc_params,      // 加速度计校准参数
     &page_delayed_stop,    // 延迟停车参数
     &page_output_smooth,   // 输出平滑参数
     &page_motor_protect,   // 电机保护参数

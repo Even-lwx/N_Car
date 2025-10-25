@@ -208,3 +208,4 @@ Refer to Chinese text files for complete pin recommendations:
 - Interrupt nesting is disabled by default on TC264 - must explicitly enable with `interrupt_global_enable(0)`
 - The control system requires IMU to be initialized successfully or it will loop indefinitely at startup ([imu.c:33-49](code/imu.c#L33))
 - Memory sections can be assigned to specific CPUs using `#pragma section` directives (project uses dual-core TC264)
+- 不要过度编码，不要写md文档

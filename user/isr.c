@@ -60,10 +60,10 @@ IFX_INTERRUPT(cc60_pit_ch1_isr, 0, CCU6_0_CH1_ISR_PRIORITY)
     static uint8 last_key = KEY_NONE; // 记录上次按键值
     uint8 key = Key_Scan();           // 扫描按键
 
-    // 只有按键值改变时才处理（避免重复触发）
+    // 只有按键值改变时才设置全局事件标志（避免重复触发）
     if (key != KEY_NONE && key != last_key)
     {
-        Key_operation(key); // 处理按键操作
+        g_key_event = key; // 设置全局按键事件标志，供主循环使用
     }
     last_key = key;
 }
