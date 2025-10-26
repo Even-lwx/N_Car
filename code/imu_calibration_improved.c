@@ -33,24 +33,6 @@ manual_calibration_state_t g_manual_calib_state = {0};
 // *************************** 静态辅助函数 ***************************
 
 /**
- * @brief       检测当前是否处于静止状态
- * @param       ax_cur, ay_cur, az_cur  当前加速度（g）
- * @param       ax_last, ay_last, az_last  上一次加速度（g）
- * @return      uint8   1=静止, 0=运动
- */
-static uint8 is_device_still(float ax_cur, float ay_cur, float az_cur,
-                              float ax_last, float ay_last, float az_last)
-{
-    float delta_ax = fabsf(ax_cur - ax_last);
-    float delta_ay = fabsf(ay_cur - ay_last);
-    float delta_az = fabsf(az_cur - az_last);
-    float max_delta = delta_ax > delta_ay ? delta_ax : delta_ay;
-    max_delta = max_delta > delta_az ? max_delta : delta_az;
-
-    return (max_delta < ACC_CAL_STILLNESS_THRESHOLD) ? 1 : 0;
-}
-
-/**
  * @brief       更新方向覆盖统计
  * @param       ax, ay, az  平均加速度（g）
  * @param       coverage    方向覆盖统计结构体指针
