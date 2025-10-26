@@ -539,12 +539,12 @@ void acc_calibration_wrapper(void)
         ips_clear();
         show_string(0, 0, "ACC Calibration");
         show_string(0, 2, "Rotate & hold");
-        show_string(0, 4, "Multi-sample OK");
+        show_string(0, 4, "50x per pose");
 
         // 显示当前进度
-        show_string(0, 6, "Sample:");
-        show_int(8, 6, g_manual_calib_state.sample_count, 2);
-        show_string(10, 6, "/30");
+        show_string(0, 6, "Poses:");
+        show_int(7, 6, g_manual_calib_state.sample_count, 2);
+        show_string(9, 6, "/30");
 
         // 显示方向覆盖
         show_string(0, 8, "Covered:");
@@ -588,7 +588,7 @@ void acc_calibration_wrapper(void)
             }
         }
 
-        show_string(0, 12, "OK:Sample(+)");
+        show_string(0, 12, "OK:Sample");
         show_string(0, 14, "BACK:Finish");
 
         // 等待按键（使用全局标志位，非阻塞）
@@ -608,12 +608,12 @@ void acc_calibration_wrapper(void)
         g_key_event = KEY_NONE;
         buzzer_beep(1, 50, 50);
         show_string(0, 2, "Sampling...    ");
-        show_string(0, 4, "              ");
+        show_string(0, 4, "Wait 0.5s      ");
 
         imu_calibrate_acc_confirm_sample();
 
         buzzer_beep(1, 100, 50);
-        system_delay_ms(300); // 缩短延迟，方便连续采样
+        system_delay_ms(500); // 显示采样完成提示
     }
 
 calibration_finish:
@@ -721,7 +721,7 @@ void acc_calibration_local_wrapper(void)
     show_string(0, 4, "Quadcopter/Car");
     show_string(0, 6, "Z-axis up");
     show_string(0, 8, "Tilt: F/B/L/R");
-    show_string(0, 10, "Sample: 15-20");
+    show_string(0, 10, "Poses: 8-10");
     show_string(0, 12, "OK:Start");
     show_string(0, 14, "BACK:Cancel");
 
@@ -769,18 +769,18 @@ void acc_calibration_local_wrapper(void)
         ips_clear();
         show_string(0, 0, "ACC Local Calib");
         show_string(0, 2, "Tilt & hold");
-        show_string(0, 4, "Multi-sample OK");
+        show_string(0, 4, "50x per pose");
 
         // 显示当前进度
-        show_string(0, 6, "Sample:");
-        show_int(8, 6, g_manual_calib_state.sample_count, 2);
-        show_string(10, 6, "/20");
+        show_string(0, 6, "Poses:");
+        show_int(7, 6, g_manual_calib_state.sample_count, 2);
+        show_string(9, 6, "/10");
 
         // 提示：前后左右倾斜
         show_string(0, 8, "Cover angles:");
-        show_string(0, 10, "F/B/L/R tilt");
+        show_string(0, 10, "F/B/L/R+combo");
 
-        show_string(0, 12, "OK:Sample(+)");
+        show_string(0, 12, "OK:Sample");
         show_string(0, 14, "BACK:Finish");
 
         // 等待按键（使用全局标志位，非阻塞）
@@ -800,12 +800,12 @@ void acc_calibration_local_wrapper(void)
         g_key_event = KEY_NONE;
         buzzer_beep(1, 50, 50);
         show_string(0, 2, "Sampling...    ");
-        show_string(0, 4, "              ");
+        show_string(0, 4, "Wait 0.5s      ");
 
         imu_calibrate_acc_confirm_sample();
 
         buzzer_beep(1, 100, 50);
-        system_delay_ms(300); // 缩短延迟，方便连续采样
+        system_delay_ms(500); // 显示采样完成提示
     }
 
 calibration_finish_local:

@@ -377,17 +377,17 @@ uint8 imu_calibrate_acc_manual_local(void)
     // 初始化状态
     memset(&g_manual_calib_state, 0, sizeof(g_manual_calib_state));
     g_manual_calib_state.is_active = true;
-    g_manual_calib_state.target_samples = 20;  // 局部校准建议20个样本
+    g_manual_calib_state.target_samples = 10;  // 局部校准建议10个姿态（每姿态50次采样）
 
     printf("\r\n========== 局部校准模式启动（Z轴向上） ==========\r\n");
     printf("适用场景：四旋翼、平衡车等Z轴向上为主的应用\r\n\r\n");
     printf("使用方法：\r\n");
     printf("  1. 保持Z轴向上（±30度倾角范围内）\r\n");
-    printf("  2. 前后左右倾斜设备到不同姿态并保持静止\r\n");
-    printf("  3. 按下确认按钮采集当前姿态数据\r\n");
-    printf("  4. 重复步骤2-3，覆盖前后左右不同倾角\r\n");
-    printf("  5. 建议采集%d个样本后完成校准\r\n\r\n", g_manual_calib_state.target_samples);
-    printf("目标样本数: %d\r\n", g_manual_calib_state.target_samples);
+    printf("  2. 倾斜到一个姿态并保持静止（每姿态50次采样）\r\n");
+    printf("  3. 按下OK采集当前姿态（一个姿态按一次）\r\n");
+    printf("  4. 重复步骤2-3，覆盖不同倾角（前后左右+组合）\r\n");
+    printf("  5. 建议采集%d个姿态后完成校准\r\n\r\n", g_manual_calib_state.target_samples);
+    printf("目标姿态数: %d\r\n", g_manual_calib_state.target_samples);
     printf("已采集: 0\r\n");
     printf("\r\n等待按钮确认...\r\n");
     printf("================================================\r\n\r\n");
@@ -410,14 +410,15 @@ uint8 imu_calibrate_acc_manual_finish_local(void)
         return 0;
     }
 
-    if (g_manual_calib_state.sample_count < 15)
+    if (g_manual_calib_state.sample_count < 8)
     {
-        printf("[错误] 样本数不足（%d/15），局部校准至少需要15个样本\r\n", g_manual_calib_state.sample_count);
+        printf("[错误] 姿态数不足（%d/8），局部校准至少需要8个姿态\r\n", g_manual_calib_state.sample_count);
         return 0;
     }
 
     printf("\r\n========== 开始计算局部校准参数 ==========\r\n");
-    printf("总样本数: %d\r\n", g_manual_calib_state.sample_count);
+    printf("总姿态数: %d\r\n", g_manual_calib_state.sample_count);
+    printf("总采样数: %d (每姿态50次)\r\n", g_manual_calib_state.sample_count * 50);
     printf("校准模式: Z轴向上局部校准\r\n\r\n");
 
     // ========== 简化模型：4参数拟合（X、Y的bias和scale） ==========
