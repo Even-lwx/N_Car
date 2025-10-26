@@ -9,8 +9,9 @@
 // *************************** 头文件包含 ***************************
 #include "imu.h"
 #include "zf_common_headfile.h"
-#include "EKF/Attitude.h"      // EKF姿态解算库
-#include "EKF/QuaternionEKF.h" // EKF四元数滤波库
+#include "EKF/Attitude.h"             // EKF姿态解算库
+#include "EKF/QuaternionEKF.h"        // EKF四元数滤波库
+#include "imu_calibration_improved.h" // 改进版加速度计校准库
 
 // *************************** 宏定义 ***************************
 #define DEG_TO_RAD 0.0174533f  // 度转弧度系数（π/180）
@@ -24,9 +25,8 @@ imu_data_t imu_data = {0}; // IMU数据结构体（加速度、陀螺仪、姿�
 // 说明: 修改此值后需重新编译和烧录
 //       0 = 一阶互补滤波（默认，计算快速，只输出pitch角）
 //       1 = EKF扩展卡尔曼滤波（精度高，输出roll/pitch/yaw三轴）
-uint8 imu_algorithm_select = 1; // 默认使用EKF算法（高精度）
+uint8 imu_algorithm_select = 0; // 默认使用EKF算法（高精度）
 // ================================================================
-
 // *************************** 校准参数 *********************
 int16 gyro_x_offset = 0; // 陀螺仪X轴零偏（原始数据）
 int16 gyro_y_offset = 0; // 陀螺仪Y轴零偏（原始数据）
@@ -35,6 +35,7 @@ float machine_angle = 0; // 机械中值角度偏移（度）
 
 // *************************** 一阶互补滤波参数 ***************************
 static float angle_pitch_temp = 0.0f; // Pitch角临时值（用于积分计算）
+static float angle_roll_temp = 0.0f;  // Roll角临时值（用于积分计算）
 uint8 gyro_ration = 4;                // 陀螺仪权重系数（可调参数）
 uint8 acc_ration = 4;                 // 加速度计权重系数（可调参数）
 float call_cycle = 0.002f;            // 解算周期（单位：秒，2ms）
@@ -77,7 +78,7 @@ uint8 imu_init(void)
         //   lambda            : 渐消因子（0.9996，防止滤波器发散）
         //   dt                : 更新周期（0.002s = 2ms，与实际调用周期一致）
         //   lpf               : 低通滤波系数（0=不使用）
-        IMU_QuaternionEKF_Init(100, 0.00001, 100000000, 0.9996, 0.002f, 0);
+        IMU_QuaternionEKF_Init(0.1, 1e-1, 1e6, 0.9996, 0.002f, 0);
 
         // 设置陀螺仪零偏初始值（从校准数据读取）
         gyroscopeOffset[0] = gyro_x_offset;
@@ -89,6 +90,7 @@ uint8 imu_init(void)
         // ---------- 一阶互补滤波初始化 ----------
         // 清零临时变量（原有算法无需额外初始化）
         angle_pitch_temp = 0.0f;
+        angle_roll_temp = 0.0f;
     }
 
     return imu_data.is_initialized ? 1 : 0;
@@ -131,25 +133,65 @@ void imu_get_data(void)
 }
 
 /*********************************************************************************************************************
+ * @brief       应用加速度计校准参数
+ * @param       ax, ay, az  原始加速度值（g）
+ * @param       ax_out, ay_out, az_out  校准后的加速度值（g）
+ * @note        应用零偏和缩放因子校准：acc_calibrated = (acc_raw - bias) * scale
+ * @example     apply_acc_calibration(ax, ay, az, &ax_cal, &ay_cal, &az_cal);
+ ********************************************************************************************************************/
+static inline void apply_acc_calibration(float ax, float ay, float az,
+                                         float *ax_out, float *ay_out, float *az_out)
+{
+    // 检查是否已校准
+    if (g_acc_calib_params.calibrated)
+    {
+        // 应用校准参数：(原始值 - 零偏) × 缩放因子
+        *ax_out = (ax - g_acc_calib_params.bias_x) * g_acc_calib_params.scale_x;
+        *ay_out = (ay - g_acc_calib_params.bias_y) * g_acc_calib_params.scale_y;
+        *az_out = (az - g_acc_calib_params.bias_z) * g_acc_calib_params.scale_z;
+    }
+    else
+    {
+        // 未校准，直接使用原始值
+        *ax_out = ax;
+        *ay_out = ay;
+        *az_out = az;
+    }
+}
+
+/*********************************************************************************************************************
  * @brief       计算姿态角（一阶互补滤波算法）
  * @param       void
  * @return      void
- * @note        使用一阶互补滤波计算pitch角，保留原有算法（仅输出pitch）
+ * @note        使用一阶互补滤波计算pitch和roll角
  * @example     imu_calculate_attitude_complementary();
  ********************************************************************************************************************/
 void imu_calculate_attitude_complementary(void)
 {
+    // ========== 转换加速度计数据并应用校准 ==========
+    float ax_raw = imu660rb_acc_transition(imu_data.acc_x);
+    float ay_raw = imu660rb_acc_transition(imu_data.acc_y);
+    float az_raw = imu660rb_acc_transition(imu_data.acc_z);
+
+    float ax, ay, az;
+    apply_acc_calibration(ax_raw, ay_raw, az_raw, &ax, &ay, &az);
+
     // ========== 一阶互补滤波计算pitch角 ==========
     // 公式: angle += (gyro_weight * gyro + acc_weight * acc_error) * dt
-    float gyro_temp = imu_data.gyro_y * gyro_ration;                   // 陀螺仪积分项
-    float acc_temp = (imu_data.acc_x - angle_pitch_temp) * acc_ration; // 加速度修正项
-    angle_pitch_temp += ((gyro_temp + acc_temp) * call_cycle);         // 融合计算
+    float gyro_pitch = imu_data.gyro_y * gyro_ration;            // 陀螺仪积分项（Y轴陀螺仪对应pitch）
+    float acc_pitch = (ax - angle_pitch_temp) * acc_ration;      // 加速度修正项（使用校准后的ax）
+    angle_pitch_temp += ((gyro_pitch + acc_pitch) * call_cycle); // 融合计算
+
+    // ========== 一阶互补滤波计算roll角 ==========
+    float gyro_roll = imu_data.gyro_x * gyro_ration;          // 陀螺仪积分项（X轴陀螺仪对应roll）
+    float acc_roll = (ay - angle_roll_temp) * acc_ration;     // 加速度修正项（使用校准后的ay）
+    angle_roll_temp += ((gyro_roll + acc_roll) * call_cycle); // 融合计算
 
     // 应用机械中值偏移
     imu_data.pitch = angle_pitch_temp + machine_angle;
+    imu_data.roll = angle_roll_temp;
 
-    // roll/yaw角不由此算法提供
-    imu_data.roll = 0.0f;
+    // yaw角不由此算法提供
     imu_data.yaw = 0.0f;
 }
 
@@ -168,10 +210,14 @@ void imu_calculate_attitude_ekf(void)
     float gy = imu660rb_gyro_transition(imu_data.gyro_y) * DEG_TO_RAD;
     float gz = imu660rb_gyro_transition(imu_data.gyro_z) * DEG_TO_RAD;
 
-    // 加速度计: 原始值 → g
-    float ax = imu660rb_acc_transition(imu_data.acc_x);
-    float ay = imu660rb_acc_transition(imu_data.acc_y);
-    float az = imu660rb_acc_transition(imu_data.acc_z);
+    // 加速度计: 原始值 → g（未校准）
+    float ax_raw = imu660rb_acc_transition(imu_data.acc_x);
+    float ay_raw = imu660rb_acc_transition(imu_data.acc_y);
+    float az_raw = imu660rb_acc_transition(imu_data.acc_z);
+
+    // 应用加速度计校准参数
+    float ax, ay, az;
+    apply_acc_calibration(ax_raw, ay_raw, az_raw, &ax, &ay, &az);
 
     // ========== 陀螺仪死区处理（EKF专用） ==========
     const float gyro_deadzone = 0.008f; // 0.008 rad/s ≈ 0.46°/s

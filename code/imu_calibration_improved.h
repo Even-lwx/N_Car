@@ -14,13 +14,13 @@
 // *************************** 配置宏定义 ***************************
 
 // *** 采样配置 ***
-#define ACC_CAL_IMPROVED_MAX_SAMPLES  500   // 最大样本组数（推荐300-500）
-#define ACC_CAL_IMPROVED_MIN_SAMPLES  100   // 最小样本组数（不建议低于100）
+#define ACC_CAL_IMPROVED_MAX_SAMPLES     500   // 最大样本组数（推荐300-500）
+#define ACC_CAL_IMPROVED_MIN_SAMPLES     100   // 最小样本组数（不建议低于100）
 
 // *** 静止检测配置 ***
-#define ACC_CAL_STILLNESS_THRESHOLD   0.05f // 静止检测阈值（g），加速度变化小于此值认为静止
-#define ACC_CAL_STILLNESS_SAMPLES     50    // 静止段内连续采样数（每段采集50个样本取平均，提高稳定性）
-#define ACC_CAL_MIN_STABLE_TIME_MS    500   // 每个方向最小稳定时间（毫秒）
+#define ACC_CAL_IMPROVED_STILLNESS_THRESHOLD   0.05f // 静止检测阈值（g），加速度变化小于此值认为静止
+#define ACC_CAL_IMPROVED_STILLNESS_SAMPLES     500   // 静止段内连续采样数（每段采集500个样本取平均，提高稳定性）
+#define ACC_CAL_IMPROVED_MIN_STABLE_TIME_MS    500   // 每个方向最小稳定时间（毫秒）
 
 // *** 方向覆盖检测配置 ***
 #define ACC_CAL_DIRECTION_TOLERANCE   0.3f  // 方向判断容差（g），主轴需接近1.0±0.3g
@@ -105,7 +105,7 @@ uint8 imu_calibrate_acc_manual(void);
  * @param       void
  * @return      void
  * @note        在按钮中断或按键扫描中调用此函数
- *              系统会快速连续采集50个样本取平均（约0.5秒）
+ *              系统会快速连续采集500个样本取平均（约5秒）
  *              大幅提高单次采样的稳定性和抗干扰能力
  * @example     在按键中断中调用: imu_calibrate_acc_confirm_sample();
  */
@@ -135,12 +135,12 @@ void imu_reset_acc_calibration(void);
  * @note        局部校准模式（适用于四旋翼、平衡车等Z轴向上为主的场景）：
  *              1. 调用此函数启动校准
  *              2. 在Z轴向上的范围内（±30度倾角范围）旋转IMU到不同姿态并保持静止
- *              3. 按下确认按钮调用 imu_calibrate_acc_confirm_sample() - 自动采集50次取平均
- *              4. 重复步骤2-3，建议采集8-10个姿态（总计400-500次原始采样）
+ *              3. 按下确认按钮调用 imu_calibrate_acc_confirm_sample() - 自动采集500次取平均
+ *              4. 重复步骤2-3，建议采集8-10个姿态（总计4000-5000次原始采样）
  *              5. 调用 imu_calibrate_acc_manual_finish_local() 完成校准
  *
  *              操作原则：
- *              - 一个姿态按一次OK（自动采集50次取平均，耗时约0.5秒）
+ *              - 一个姿态按一次OK（自动采集500次取平均，耗时约5秒）
  *              - 总共8-10个姿态即可（无需重复采样同一姿态）
  *
  *              四旋翼推荐10个姿态配置：
@@ -155,7 +155,7 @@ void imu_reset_acc_calibration(void);
  *              9. 后仰+右滚（各10度）
  *              10. 水平微调（0-5度随机倾角）
  *
- *              总计：10姿态 × 50次采样 = 500次原始数据
+ *              总计：10姿态 × 500次采样 = 5000次原始数据
  * @example     uint8 result = imu_calibrate_acc_manual_local();
  */
 uint8 imu_calibrate_acc_manual_local(void);

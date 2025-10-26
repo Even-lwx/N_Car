@@ -135,11 +135,11 @@ void imu_calibrate_acc_confirm_sample(void)
 
     printf("\r\n[采样] 按钮确认，开始采集...\r\n");
 
-    // ========== 快速连续采集50个样本取平均 ==========
+    // ========== 快速连续采集500个样本取平均 ==========
     float ax_sum = 0, ay_sum = 0, az_sum = 0;
-    uint8 valid_samples = 0;
+    uint16 valid_samples = 0;  // 改为uint16以支持500个样本
 
-    for (uint8 i = 0; i < ACC_CAL_STILLNESS_SAMPLES; i++)
+    for (uint16 i = 0; i < ACC_CAL_IMPROVED_STILLNESS_SAMPLES; i++)
     {
         // 等待数据更新
         imu_data.data_ready = false;
@@ -163,9 +163,9 @@ void imu_calibrate_acc_confirm_sample(void)
         valid_samples++;
     }
 
-    if (valid_samples < (ACC_CAL_STILLNESS_SAMPLES / 2))
+    if (valid_samples < (ACC_CAL_IMPROVED_STILLNESS_SAMPLES / 2))
     {
-        printf("[错误] 采样失败，有效样本数不足（%d/%d）\r\n", valid_samples, ACC_CAL_STILLNESS_SAMPLES);
+        printf("[错误] 采样失败，有效样本数不足（%d/%d）\r\n", valid_samples, ACC_CAL_IMPROVED_STILLNESS_SAMPLES);
         return;
     }
 
@@ -291,9 +291,16 @@ uint8 imu_calibrate_acc_manual_finish(void)
     float E = X_data[4];
     float F = X_data[5];
 
-    if (A <= 1e-6f || B <= 1e-6f || C <= 1e-6f)
+    // 调试输出：显示拟合系数
+    printf("[调试] 椭球拟合系数:\r\n");
+    printf("  A=%.10f, B=%.10f, C=%.10f\r\n", A, B, C);
+    printf("  D=%.10f, E=%.10f, F=%.10f\r\n", D, E, F);
+
+    if (A <= 1e-8f || B <= 1e-8f || C <= 1e-8f)
     {
         printf("[错误] 拟合结果异常 (系数过小)!\r\n");
+        printf("  A=%.3e, B=%.3e, C=%.3e (阈值: 1e-8)\r\n", A, B, C);
+        printf("建议: 在更多方向上采集数据（确保6面都有覆盖）\r\n");
         g_manual_calib_state.is_active = false;
         return 0;
     }
@@ -383,7 +390,7 @@ uint8 imu_calibrate_acc_manual_local(void)
     printf("适用场景：四旋翼、平衡车等Z轴向上为主的应用\r\n\r\n");
     printf("使用方法：\r\n");
     printf("  1. 保持Z轴向上（±30度倾角范围内）\r\n");
-    printf("  2. 倾斜到一个姿态并保持静止（每姿态50次采样）\r\n");
+    printf("  2. 倾斜到一个姿态并保持静止（每姿态500次采样，约5秒）\r\n");
     printf("  3. 按下OK采集当前姿态（一个姿态按一次）\r\n");
     printf("  4. 重复步骤2-3，覆盖不同倾角（前后左右+组合）\r\n");
     printf("  5. 建议采集%d个姿态后完成校准\r\n\r\n", g_manual_calib_state.target_samples);
@@ -418,20 +425,14 @@ uint8 imu_calibrate_acc_manual_finish_local(void)
 
     printf("\r\n========== 开始计算局部校准参数 ==========\r\n");
     printf("总姿态数: %d\r\n", g_manual_calib_state.sample_count);
-    printf("总采样数: %d (每姿态50次)\r\n", g_manual_calib_state.sample_count * 50);
+    printf("总采样数: %d (每姿态500次)\r\n", g_manual_calib_state.sample_count * 500);
     printf("校准模式: Z轴向上局部校准\r\n\r\n");
 
     // ========== 简化模型：4参数拟合（X、Y的bias和scale） ==========
     // 椭球方程简化为：A*(x+D)^2 + B*(y+E)^2 + (z-1)^2 = 1
     // 其中 z 接近 1g，我们用平均值估算 Z 的 bias
 
-    // 构造 4x4 系统（只拟合 X、Y 轴）
-    float HTH_4x4[16] = {0};  // 4×4 矩阵
-    float HTb_4x4[4] = {0};   // 4×1 向量
-
-    // 重新遍历所有采样数据（从 HTH_data 和 HTb_data 中提取）
-    // 我们需要访问原始的 ax, ay, az 数据，但这些数据没有保存
-    // 因此我们使用完整的6参数模型求解，然后只使用 X、Y 的结果
+    // 由于原始数据未保存，使用完整6参数模型求解，然后只使用 X、Y 的结果
 
     // ========== 使用完整6参数求解（与全局校准相同） ==========
     float HTH_inv_data[36];
@@ -468,9 +469,17 @@ uint8 imu_calibrate_acc_manual_finish_local(void)
     float E = X_data[4];
     float F = X_data[5];
 
-    if (A <= 1e-6f || B <= 1e-6f || C <= 1e-6f)
+    // 调试输出：显示拟合系数
+    printf("[调试] 椭球拟合系数:\r\n");
+    printf("  A=%.10f, B=%.10f, C=%.10f\r\n", A, B, C);
+    printf("  D=%.10f, E=%.10f, F=%.10f\r\n", D, E, F);
+
+    // 局部校准时Z轴变化小，放宽阈值检查（从1e-6改为1e-8）
+    if (A <= 1e-8f || B <= 1e-8f || C <= 1e-8f)
     {
         printf("[错误] 拟合结果异常 (系数过小)!\r\n");
+        printf("  A=%.3e, B=%.3e, C=%.3e (阈值: 1e-8)\r\n", A, B, C);
+        printf("建议: 确保姿态覆盖足够的倾角范围（前后左右±10度以上）\r\n");
         g_manual_calib_state.is_active = false;
         return 0;
     }

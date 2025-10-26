@@ -71,19 +71,29 @@ int core0_main(void)
     {
         if (enable)
         {
+            // Cargo模式运行中 - 检测任意按键退出
+            if (g_key_event != KEY_NONE)
+            {
+                // 任意按键都当作BACK键处理，退出cargo模式
+                enable = false;
+                momentum_wheel_control(0);
+                drive_wheel_control(0);
+                motor_reset_protection();
+                g_key_event = KEY_BACK; // 强制设为BACK键，让菜单系统处理页面返回
+            }
+
             if (mt9v03x_finish_flag)
             {
                 // Cargo 模式运行中，停止菜单刷新
                 // 图像处理（在主循环中执行，避免占用中断时间）
                 image_process();
 
-                // 转向PID控制（基于图像偏差和陀螺仪gz）
+                // 转���PID控制（基于图像偏差和陀螺仪gz）
                 steer_pid_control();
 
                 // 例如：实时显示调试信息
                 // printf("%f,%d,%f\r\n", imu_data.pitch, imu_data.gyro_y, filtered_motor_output);
                 // printf("%f,%d\r\n", drive_pwm_output, encoder[1]);
-                // 检测退出（BACK键由20ms中断处理，这里只需要检查enable状态）
 
                 // 清除图像采集完成标志，允许处理下一帧
                 mt9v03x_finish_flag = 0;
@@ -91,10 +101,11 @@ int core0_main(void)
         }
         else
         {
-            
+
             // 正常菜单模式
             menu_update();
             // printf("%f,%d\r\n", imu_data.pitch, imu_data.gyro_y);
+            printf("%f,%f,%f\r\n", imu_data.roll, imu_data.pitch, imu_data.yaw);
         }
 
         // 减少CPU占用

@@ -539,7 +539,7 @@ void acc_calibration_wrapper(void)
         ips_clear();
         show_string(0, 0, "ACC Calibration");
         show_string(0, 2, "Rotate & hold");
-        show_string(0, 4, "50x per pose");
+        show_string(0, 4, "500x per pose");
 
         // 显示当前进度
         show_string(0, 6, "Poses:");
@@ -608,7 +608,7 @@ void acc_calibration_wrapper(void)
         g_key_event = KEY_NONE;
         buzzer_beep(1, 50, 50);
         show_string(0, 2, "Sampling...    ");
-        show_string(0, 4, "Wait 0.5s      ");
+        show_string(0, 4, "Wait ~5sec     ");
 
         imu_calibrate_acc_confirm_sample();
 
@@ -769,7 +769,7 @@ void acc_calibration_local_wrapper(void)
         ips_clear();
         show_string(0, 0, "ACC Local Calib");
         show_string(0, 2, "Tilt & hold");
-        show_string(0, 4, "50x per pose");
+        show_string(0, 4, "500x per pose");
 
         // 显示当前进度
         show_string(0, 6, "Poses:");
@@ -800,7 +800,7 @@ void acc_calibration_local_wrapper(void)
         g_key_event = KEY_NONE;
         buzzer_beep(1, 50, 50);
         show_string(0, 2, "Sampling...    ");
-        show_string(0, 4, "Wait 0.5s      ");
+        show_string(0, 4, "Wait ~5sec     ");
 
         imu_calibrate_acc_confirm_sample();
 

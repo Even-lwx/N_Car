@@ -216,16 +216,7 @@ void Menu_Back(void)
     else if (Now_Menu->stage == Funtion)
     {
         // 退出功能页面，返回到父菜单
-
-        // cargo模式的特殊退出处理
-        if (Now_Menu == &page_cargo)
-        {
-            // 禁用PID控制并停止电机
-            enable = false;
-            momentum_wheel_control(0);
-            drive_wheel_control(0);
-            motor_reset_protection();
-        }
+        // 注意：cargo模式的电机关闭已在主循环中处理（cpu0_main.c）
 
         if (Now_Menu->back != NULL)
         {
