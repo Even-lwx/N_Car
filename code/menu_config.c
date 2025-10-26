@@ -538,8 +538,8 @@ void acc_calibration_wrapper(void)
     {
         ips_clear();
         show_string(0, 0, "ACC Calibration");
-        show_string(0, 2, "Rotate to side");
-        show_string(0, 4, "and hold still");
+        show_string(0, 2, "Rotate & hold");
+        show_string(0, 4, "Multi-sample OK");
 
         // 显示当前进度
         show_string(0, 6, "Sample:");
@@ -588,7 +588,8 @@ void acc_calibration_wrapper(void)
             }
         }
 
-        show_string(0, 12, "OK:Sample");
+        show_string(0, 12, "OK:Sample(+)");
+        show_string(0, 14, "BACK:Finish");
 
         // 等待按键（使用全局标志位，非阻塞）
         g_key_event = KEY_NONE;
@@ -612,7 +613,7 @@ void acc_calibration_wrapper(void)
         imu_calibrate_acc_confirm_sample();
 
         buzzer_beep(1, 100, 50);
-        system_delay_ms(500); // 显示采样完成提示
+        system_delay_ms(300); // 缩短延迟，方便连续采样
     }
 
 calibration_finish:
@@ -767,8 +768,8 @@ void acc_calibration_local_wrapper(void)
     {
         ips_clear();
         show_string(0, 0, "ACC Local Calib");
-        show_string(0, 2, "Tilt to side");
-        show_string(0, 4, "and hold still");
+        show_string(0, 2, "Tilt & hold");
+        show_string(0, 4, "Multi-sample OK");
 
         // 显示当前进度
         show_string(0, 6, "Sample:");
@@ -779,7 +780,8 @@ void acc_calibration_local_wrapper(void)
         show_string(0, 8, "Cover angles:");
         show_string(0, 10, "F/B/L/R tilt");
 
-        show_string(0, 12, "OK:Sample");
+        show_string(0, 12, "OK:Sample(+)");
+        show_string(0, 14, "BACK:Finish");
 
         // 等待按键（使用全局标志位，非阻塞）
         g_key_event = KEY_NONE;
@@ -803,7 +805,7 @@ void acc_calibration_local_wrapper(void)
         imu_calibrate_acc_confirm_sample();
 
         buzzer_beep(1, 100, 50);
-        system_delay_ms(500); // 显示采样完成提示
+        system_delay_ms(300); // 缩短延迟，方便连续采样
     }
 
 calibration_finish_local:

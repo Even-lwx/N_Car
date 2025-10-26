@@ -135,7 +135,7 @@ void imu_calibrate_acc_confirm_sample(void)
 
     printf("\r\n[采样] 按钮确认，开始采集...\r\n");
 
-    // ========== 快速连续采集10个样本取平均 ==========
+    // ========== 快速连续采集50个样本取平均 ==========
     float ax_sum = 0, ay_sum = 0, az_sum = 0;
     uint8 valid_samples = 0;
 
@@ -163,9 +163,9 @@ void imu_calibrate_acc_confirm_sample(void)
         valid_samples++;
     }
 
-    if (valid_samples < 5)
+    if (valid_samples < (ACC_CAL_STILLNESS_SAMPLES / 2))
     {
-        printf("[错误] 采样失败，有效样本数不足（%d/10）\r\n", valid_samples);
+        printf("[错误] 采样失败，有效样本数不足（%d/%d）\r\n", valid_samples, ACC_CAL_STILLNESS_SAMPLES);
         return;
     }
 

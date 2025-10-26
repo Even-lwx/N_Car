@@ -19,7 +19,7 @@
 
 // *** 静止检测配置 ***
 #define ACC_CAL_STILLNESS_THRESHOLD   0.05f // 静止检测阈值（g），加速度变化小于此值认为静止
-#define ACC_CAL_STILLNESS_SAMPLES     10    // 静止段内连续采样数（每段采集10个样本取平均）
+#define ACC_CAL_STILLNESS_SAMPLES     50    // 静止段内连续采样数（每段采集50个样本取平均，提高稳定性）
 #define ACC_CAL_MIN_STABLE_TIME_MS    500   // 每个方向最小稳定时间（毫秒）
 
 // *** 方向覆盖检测配置 ***
@@ -105,7 +105,8 @@ uint8 imu_calibrate_acc_manual(void);
  * @param       void
  * @return      void
  * @note        在按钮中断或按键扫描中调用此函数
- *              系统会采集当前方向的数据（10个样本快速平均）
+ *              系统会快速连续采集50个样本取平均（约0.5秒）
+ *              大幅提高单次采样的稳定性和抗干扰能力
  * @example     在按键中断中调用: imu_calibrate_acc_confirm_sample();
  */
 void imu_calibrate_acc_confirm_sample(void);
@@ -138,8 +139,13 @@ void imu_reset_acc_calibration(void);
  *              4. 重复步骤2-3，建议采集15-20个样本（覆盖不同前后左右倾角）
  *              5. 调用 imu_calibrate_acc_manual_finish_local() 完成校准
  *
+ *              连续采样技巧：
+ *              - 可在同一姿态下连续按OK多次采样，增加该姿态的权重
+ *              - 例如：水平姿态采3次，前倾10度采2次，后仰10度采2次...
+ *              - 重要姿态多采样，可提高该区域的校准精度
+ *
  *              四旋翼使用建议：
- *              - 将飞控平放在桌面上（水平姿态）采1个样本
+ *              - 将飞控平放在桌面上（水平姿态）采2-3个样本
  *              - 向前倾斜5-15度采2-3个样本
  *              - 向后倾斜5-15度采2-3个样本
  *              - 向左倾斜5-15度采2-3个样本
