@@ -128,4 +128,28 @@ uint8 imu_calibrate_acc_manual_finish(void);
  */
 void imu_reset_acc_calibration(void);
 
+/**
+ * @brief       启动局部手动校准模式（Z轴向上范围）
+ * @return      uint8           校准结果（1=成功启动, 0=失败）
+ * @note        局部校准模式（适用于直立平衡车等Z轴向上场景）：
+ *              1. 调用此函数启动校准
+ *              2. 在Z轴向上的范围内（±30度倾角范围）旋转IMU到不同姿态并保持静止
+ *              3. 按下确认按钮调用 imu_calibrate_acc_confirm_sample()
+ *              4. 重复步骤2-3，建议采集15-20个样本（覆盖不同前后左右倾角）
+ *              5. 调用 imu_calibrate_acc_manual_finish_local() 完成校准
+ * @example     uint8 result = imu_calibrate_acc_manual_local();
+ */
+uint8 imu_calibrate_acc_manual_local(void);
+
+/**
+ * @brief       完成局部手动校准并计算参数（Z轴向上范围）
+ * @param       void
+ * @return      uint8           校准结果（1=成功, 0=失败）
+ * @note        采集足够样本后调用此函数完成局部校准
+ *              使用简化的2自由度椭球拟合（假设Z轴接近1g）
+ *              只校准X、Y轴的bias和scale，Z轴使用简化模型
+ * @example     uint8 result = imu_calibrate_acc_manual_finish_local();
+ */
+uint8 imu_calibrate_acc_manual_finish_local(void);
+
 #endif // IMU_CALIBRATION_IMPROVED_H

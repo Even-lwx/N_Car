@@ -682,6 +682,197 @@ Page page_acc_calibration = {
     .scroll_offset = 0,
 };
 
+// 5.4.2 加速度计局部校准功能（Z轴向上范围）
+void acc_calibration_local_wrapper(void)
+{
+    ips_clear();
+    show_string(0, 0, "ACC Local Calib");
+
+    // 检查IMU初始化状态
+    if (!imu_data.is_initialized)
+    {
+        show_string(0, 4, "IMU Not Init!");
+        show_string(0, 8, "Press BACK");
+        buzzer_beep(3, 50, 50); // 3声短促蜂鸣表示错误
+
+        // 使用全局标志位，非阻塞等待BACK键
+        g_key_event = KEY_NONE;
+        while (g_key_event != KEY_BACK)
+        {
+            system_delay_ms(20);
+        }
+        g_key_event = KEY_NONE;
+        return;
+    }
+
+    // 显示校准前状态
+    show_string(0, 2, "Status:");
+    if (g_acc_calib_params.calibrated)
+    {
+        show_string_color(8, 2, "Calibrated", RGB565_GREEN);
+    }
+    else
+    {
+        show_string_color(8, 2, "Not Calib", RGB565_RED);
+    }
+
+    // 显示说明（局部校准）
+    show_string(0, 4, "Z-axis up only");
+    show_string(0, 6, "Tilt front/back");
+    show_string(0, 8, "left/right");
+    show_string(0, 10, "Sample: 15-20");
+    show_string(0, 12, "OK:Start");
+    show_string(0, 14, "BACK:Cancel");
+
+    buzzer_beep(1, 50, 100);
+
+    // 等待用户确认（使用全局标志位，非阻塞）
+    g_key_event = KEY_NONE;
+    while (g_key_event != KEY_OK && g_key_event != KEY_BACK)
+    {
+        system_delay_ms(20);
+    }
+
+    if (g_key_event == KEY_BACK)
+    {
+        g_key_event = KEY_NONE;
+        return; // 取消校准
+    }
+    g_key_event = KEY_NONE;
+
+    // 启动局部手动校准模式
+    uint8 result = imu_calibrate_acc_manual_local();
+
+    if (!result)
+    {
+        ips_clear();
+        show_string(0, 0, "ACC Local Calib");
+        show_string_color(0, 6, "Start Failed!", RGB565_RED);
+        show_string(0, 10, "Press BACK");
+
+        // 使用全局标志位，非阻塞等待BACK键
+        g_key_event = KEY_NONE;
+        while (g_key_event != KEY_BACK)
+        {
+            system_delay_ms(20);
+        }
+        g_key_event = KEY_NONE;
+        return;
+    }
+
+    buzzer_beep(2, 100, 100); // 2声蜂鸣表示开始
+
+    // ========== 进入采样循环 ==========
+    while (1)
+    {
+        ips_clear();
+        show_string(0, 0, "ACC Local Calib");
+        show_string(0, 2, "Tilt to side");
+        show_string(0, 4, "and hold still");
+
+        // 显示当前进度
+        show_string(0, 6, "Sample:");
+        show_int(8, 6, g_manual_calib_state.sample_count, 2);
+        show_string(10, 6, "/20");
+
+        // 提示：前后左右倾斜
+        show_string(0, 8, "Cover angles:");
+        show_string(0, 10, "F/B/L/R tilt");
+
+        show_string(0, 12, "OK:Sample");
+
+        // 等待按键（使用全局标志位，非阻塞）
+        g_key_event = KEY_NONE;
+        while (g_key_event != KEY_OK && g_key_event != KEY_BACK)
+        {
+            system_delay_ms(20);
+        }
+
+        if (g_key_event == KEY_BACK)
+        {
+            g_key_event = KEY_NONE;
+            goto calibration_finish_local; // 完成校准
+        }
+
+        // 执行采样 (g_key_event == KEY_OK)
+        g_key_event = KEY_NONE;
+        buzzer_beep(1, 50, 50);
+        show_string(0, 2, "Sampling...    ");
+        show_string(0, 4, "              ");
+
+        imu_calibrate_acc_confirm_sample();
+
+        buzzer_beep(1, 100, 50);
+        system_delay_ms(500); // 显示采样完成提示
+    }
+
+calibration_finish_local:
+    // 完成局部校准并计算参数
+    ips_clear();
+    show_string(0, 0, "ACC Local Calib");
+    show_string(0, 6, "Computing...");
+
+    result = imu_calibrate_acc_manual_finish_local();
+
+    // 显示结果
+    ips_clear();
+    show_string(0, 0, "ACC Local Calib");
+
+    if (result && g_acc_calib_params.calibrated)
+    {
+        show_string_color(0, 2, "Success!", RGB565_GREEN);
+
+        // 显示校准结果
+        show_string(0, 4, "Bias:");
+        show_float(7, 4, g_acc_calib_params.bias_x, 1, 3);
+        show_float(13, 4, g_acc_calib_params.bias_y, 1, 3);
+        show_float(19, 4, g_acc_calib_params.bias_z, 1, 3);
+
+        show_string(0, 6, "Scale:");
+        show_float(7, 6, g_acc_calib_params.scale_x, 1, 3);
+        show_float(13, 6, g_acc_calib_params.scale_y, 1, 3);
+        show_float(19, 6, g_acc_calib_params.scale_z, 1, 3);
+
+        // 保存参数到Flash
+        show_string(0, 8, "Saving...");
+        Param_Save_All();
+        show_string_color(0, 8, "Saved!   ", RGB565_GREEN);
+
+        buzzer_beep(3, 100, 100); // 3声蜂鸣表示成功
+    }
+    else
+    {
+        show_string_color(0, 2, "Failed!", RGB565_RED);
+        show_string(0, 4, "Check:");
+        show_string(0, 6, "-Enough samples");
+        show_string(0, 8, "-Angle coverage");
+
+        buzzer_beep(5, 50, 50); // 5声短促蜂鸣表示失败
+    }
+
+    show_string(0, 12, "Press BACK");
+
+    // 等待返回（使用全局标志位，非阻塞）
+    g_key_event = KEY_NONE;
+    while (g_key_event != KEY_BACK)
+    {
+        system_delay_ms(20);
+    }
+    g_key_event = KEY_NONE;
+}
+
+Page page_acc_calibration_local = {
+    .name = "ACC Local Calib",
+    .data = NULL,
+    .len = 0,
+    .stage = Funtion,
+    .back = NULL, // 在 Menu_Config_Init() 中设置
+    .enter = {NULL},
+    .content = {.function = acc_calibration_local_wrapper},
+    .order = 0,
+    .scroll_offset = 0,
+};
+
 // 5.5 加速度计校准重置功能
 void acc_calibration_reset_wrapper(void)
 {
@@ -749,10 +940,10 @@ Page page_acc_reset = {
 Page page_imu = {
     .name = "IMU",
     .data = NULL,
-    .len = 5, // 更新子菜单数量
+    .len = 6, // 更新子菜单数量（增加局部校准）
     .stage = Menu,
     .back = NULL, // 在 Menu_Config_Init() 中设置
-    .enter = {&page_imu_params, &page_gyro_calibration, &page_acc_params, &page_acc_calibration, &page_acc_reset},
+    .enter = {&page_imu_params, &page_gyro_calibration, &page_acc_params, &page_acc_calibration, &page_acc_calibration_local, &page_acc_reset},
     .content = {NULL},
     .order = 0,
     .scroll_offset = 0,
@@ -1089,5 +1280,6 @@ void Menu_Config_Init(void)
     page_gyro_calibration.back = &page_imu;
     page_acc_params.back = &page_imu;
     page_acc_calibration.back = &page_imu;
+    page_acc_calibration_local.back = &page_imu; // 局部校准页面
     page_acc_reset.back = &page_imu;
 }
