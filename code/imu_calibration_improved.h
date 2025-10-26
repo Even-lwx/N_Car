@@ -88,22 +88,14 @@ extern manual_calibration_state_t g_manual_calib_state;
 // *************************** 函数声明 ***************************
 
 /**
- * @brief       改进版加速度计校准函数（手动按钮确认模式）
- * @param       void
- * @return      uint8           校准结果（1=成功, 0=失败）
- * @note        **手动确认模式：**
+ * @brief       启动手动校准模式
+ * @return      uint8           校准结果（1=成功启动, 0=失败）
+ * @note        手动确认模式：
  *              1. 调用此函数启动校准
  *              2. 将IMU旋转到一个方向并保持静止
- *              3. 按下确认按钮，系统采集当前方向数据（10个样本平均）
- *              4. 重复步骤2-3，直到覆盖6个主要方向（±X, ±Y, ±Z）
- *              5. 系统实时显示已覆盖的方向
- *              6. 采集足够样本后自动计算校准参数
- *
- *              **优点：**
- *              - 完全由用户控制采样时机
- *              - 确保每次采样都在静止状态
- *              - 可以精确控制每个方向的采样质量
- *
+ *              3. 按下确认按钮调用 imu_calibrate_acc_confirm_sample()
+ *              4. 重复步骤2-3直到覆盖6个方向
+ *              5. 调用 imu_calibrate_acc_manual_finish() 完成校准
  * @example     uint8 result = imu_calibrate_acc_manual();
  */
 uint8 imu_calibrate_acc_manual(void);
@@ -129,44 +121,11 @@ void imu_calibrate_acc_confirm_sample(void);
 uint8 imu_calibrate_acc_manual_finish(void);
 
 /**
- * @brief       应用加速度计校准参数到原始数据
- * @param       ax_raw      原始X轴加速度（g）
- * @param       ay_raw      原始Y轴加速度（g）
- * @param       az_raw      原始Z轴加速度（g）
- * @param       ax_cal      校准后X轴加速度（g）输出指针
- * @param       ay_cal      校准后Y轴加速度（g）输出指针
- * @param       az_cal      校准后Z轴加速度（g）输出指针
- * @note        调用此函数前需确保已完成校准（g_acc_calib_params.calibrated == 1）
- * @example     imu_apply_acc_calibration(ax_raw, ay_raw, az_raw, &ax_cal, &ay_cal, &az_cal);
- */
-void imu_apply_acc_calibration(float ax_raw, float ay_raw, float az_raw,
-                                float *ax_cal, float *ay_cal, float *az_cal);
-
-/**
- * @brief       打印当前加速度计校准参数
- * @param       void
- * @return      void
- * @note        用于调试和参数记录
- * @example     imu_print_acc_calibration_params();
- */
-void imu_print_acc_calibration_params(void);
-
-/**
  * @brief       重置加速度计校准参数为默认值
- * @param       void
  * @return      void
  * @note        恢复到未校准状态（bias=0, scale=1）
  * @example     imu_reset_acc_calibration();
  */
 void imu_reset_acc_calibration(void);
-
-/**
- * @brief       验证加速度计校准效果
- * @param       test_duration_ms    测试持续时间（毫秒）
- * @return      float               平均误差（g），越小越好
- * @note        设备需保持静止，检测校准后加速度模长是否接近1.0g
- * @example     float error = imu_verify_acc_calibration(10000);
- */
-float imu_verify_acc_calibration(uint32 test_duration_ms);
 
 #endif // IMU_CALIBRATION_IMPROVED_H
