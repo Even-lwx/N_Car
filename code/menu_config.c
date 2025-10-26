@@ -717,9 +717,9 @@ void acc_calibration_local_wrapper(void)
     }
 
     // 显示说明（局部校准）
-    show_string(0, 4, "Z-axis up only");
-    show_string(0, 6, "Tilt front/back");
-    show_string(0, 8, "left/right");
+    show_string(0, 4, "Quadcopter/Car");
+    show_string(0, 6, "Z-axis up");
+    show_string(0, 8, "Tilt: F/B/L/R");
     show_string(0, 10, "Sample: 15-20");
     show_string(0, 12, "OK:Start");
     show_string(0, 14, "BACK:Cancel");

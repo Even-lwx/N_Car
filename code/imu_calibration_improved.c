@@ -362,8 +362,9 @@ void imu_reset_acc_calibration(void)
 
 /**
  * @brief       启动局部手动校准模式（Z轴向上范围）
- * @note        适用于直立平衡车等只在Z轴向上范围工作的场景
+ * @note        适用于四旋翼、平衡车等Z轴向上为主的应用场景
  *              不需要6面翻转，只需要在±30度倾角范围内采集多个姿态
+ *              对于四旋翼：可在桌面上前后左右倾斜机体，模拟飞行姿态变化
  */
 uint8 imu_calibrate_acc_manual_local(void)
 {
@@ -379,10 +380,10 @@ uint8 imu_calibrate_acc_manual_local(void)
     g_manual_calib_state.target_samples = 20;  // 局部校准建议20个样本
 
     printf("\r\n========== 局部校准模式启动（Z轴向上） ==========\r\n");
-    printf("适用场景：直立平衡车、Z轴始终向上的应用\r\n\r\n");
+    printf("适用场景：四旋翼、平衡车等Z轴向上为主的应用\r\n\r\n");
     printf("使用方法：\r\n");
     printf("  1. 保持Z轴向上（±30度倾角范围内）\r\n");
-    printf("  2. 前后左右倾斜车体到不同姿态并保持静止\r\n");
+    printf("  2. 前后左右倾斜设备到不同姿态并保持静止\r\n");
     printf("  3. 按下确认按钮采集当前姿态数据\r\n");
     printf("  4. 重复步骤2-3，覆盖前后左右不同倾角\r\n");
     printf("  5. 建议采集%d个样本后完成校准\r\n\r\n", g_manual_calib_state.target_samples);
