@@ -12,6 +12,7 @@
 #include "EKF/Attitude.h"             // EKF姿态解算库
 #include "EKF/QuaternionEKF.h"        // EKF四元数滤波库
 #include "imu_calibration_improved.h" // 改进版加速度计校准库
+#include <stdio.h>
 
 // *************************** 宏定义 ***************************
 #define DEG_TO_RAD 0.0174533f  // 度转弧度系数（π/180）
@@ -19,13 +20,15 @@
 
 // *************************** 全局变量定义 ***************************
 imu_data_t imu_data = {0}; // IMU数据结构体（加速度、陀螺仪、姿态角）
+imu_dual_data_t imu_dual_data = {0}; // 双算法数据结构体（测试模式用）
 
 // ======================== 算法选择配置 ========================
 // 功能: 切换IMU姿态解算算法
 // 说明: 修改此值后需重新编译和烧录
-//       0 = 一阶互补滤波（默认，计算快速，只输出pitch角）
+//       0 = 一阶互补滤波（默认，计算快速，输出roll和pitch角）
 //       1 = EKF扩展卡尔曼滤波（精度高，输出roll/pitch/yaw三轴）
-uint8 imu_algorithm_select = 0; // 默认使用EKF算法（高精度）
+//       2 = 双算法同时运行（测试模式，两种算法结果分别输出）
+uint8 imu_algorithm_select = 2; // 设置为测试模式
 // ================================================================
 // *************************** 校准参数 *********************
 int16 gyro_x_offset = 0; // 陀螺仪X轴零偏（原始数据）
@@ -81,6 +84,19 @@ uint8 imu_init(void)
         IMU_QuaternionEKF_Init(0.1, 1e-1, 1e6, 0.9996, 0.002f, 0);
 
         // 设置陀螺仪零偏初始值（从校准数据读取）
+        gyroscopeOffset[0] = gyro_x_offset;
+        gyroscopeOffset[1] = gyro_y_offset;
+        gyroscopeOffset[2] = gyro_z_offset;
+    }
+    else if (imu_algorithm_select == 2) // 双算法模式
+    {
+        // ---------- 双算法初始化（同时初始化互补滤波和EKF） ----------
+        // 初始化互补滤波
+        angle_pitch_temp = 0.0f;
+        angle_roll_temp = 0.0f;
+        
+        // 初始化EKF
+        IMU_QuaternionEKF_Init(0.1, 1e-1, 1e6, 0.9996, 0.002f, 0);
         gyroscopeOffset[0] = gyro_x_offset;
         gyroscopeOffset[1] = gyro_y_offset;
         gyroscopeOffset[2] = gyro_z_offset;
@@ -242,6 +258,84 @@ void imu_calculate_attitude_ekf(void)
 }
 
 /*********************************************************************************************************************
+ * @brief       计算姿态角（双算法测试模式）
+ * @param       void
+ * @return      void
+ * @note        同时运行互补滤波和EKF算法，结果分别存储在 imu_dual_data 中，
+ *              并通过 imu_host_send() 发送到上位机（默认空实现，用户可覆盖）
+ * @example     imu_calculate_attitude_dual();
+ ********************************************************************************************************************/
+void imu_calculate_attitude_dual(void)
+{
+    // ----- 1) 互补滤波（计算但不覆盖全局 imu_data，结果写入 imu_dual_data.comp_*） -----
+    // 使用与 imu_calculate_attitude_complementary 相同的处理流程
+    float ax_raw = imu660rb_acc_transition(imu_data.acc_x);
+    float ay_raw = imu660rb_acc_transition(imu_data.acc_y);
+    float az_raw = imu660rb_acc_transition(imu_data.acc_z);
+
+    float ax, ay, az;
+    apply_acc_calibration(ax_raw, ay_raw, az_raw, &ax, &ay, &az);
+
+    // 局部临时角度，避免修改全局互补滤波状态（但保留全局积分使互补滤波能连续运行）
+    // 为了保持互补滤波连续性，这里仍然使用全局角度临时变量进行积分
+    float gyro_pitch = imu_data.gyro_y * gyro_ration;
+    float acc_pitch = (ax - angle_pitch_temp) * acc_ration;
+    angle_pitch_temp += ((gyro_pitch + acc_pitch) * call_cycle);
+
+    float gyro_roll = imu_data.gyro_x * gyro_ration;
+    float acc_roll = (ay - angle_roll_temp) * acc_ration;
+    angle_roll_temp += ((gyro_roll + acc_roll) * call_cycle);
+
+    imu_dual_data.comp_pitch = angle_pitch_temp + machine_angle;
+    imu_dual_data.comp_roll = angle_roll_temp;
+    imu_dual_data.comp_yaw = 0.0f; // 互补滤波不输出yaw
+
+    // ----- 2) EKF （复用现有EKF更新与读取） -----
+    // EKF需要使用物理单位（弧度）+ 加速度（g）
+    float gx = imu660rb_gyro_transition(imu_data.gyro_x) * DEG_TO_RAD;
+    float gy = imu660rb_gyro_transition(imu_data.gyro_y) * DEG_TO_RAD;
+    float gz = imu660rb_gyro_transition(imu_data.gyro_z) * DEG_TO_RAD;
+
+    // 应用加速度计校准参数（与EKF函数一致）
+    // 注意：上面已经计算过 ax/ay/az（以 g 为单位并校准）
+
+    // 陀螺仪死区处理（与EKF保持一致）
+    const float gyro_deadzone = 0.008f;
+    if (fabsf(gx) < gyro_deadzone)
+        gx = 0;
+    if (fabsf(gy) < gyro_deadzone)
+        gy = 0;
+    if (fabsf(gz) < gyro_deadzone)
+        gz = 0;
+
+    // 调用EKF更新（内部会更新 QEKF_INS）
+    IMU_QuaternionEKF_Update(gx, gy, gz, ax, ay, az);
+
+    // 从EKF读取结果（度），保持与 imu_calculate_attitude_ekf 相同的方向约定
+    imu_dual_data.ekf_pitch = -QEKF_INS.Pitch + machine_angle;
+    imu_dual_data.ekf_roll = -QEKF_INS.Roll;
+    imu_dual_data.ekf_yaw = QEKF_INS.Yaw;
+
+    // ----- 3) 将两套结果格式化并发送到上位机（如果用户实现了 imu_host_send） -----
+    char buf[128];
+    // 格式: COMP,roll,pitch;EKF,roll,pitch,yaw\n
+    int len = snprintf(buf, sizeof(buf), "COMP,%.2f,%.2f;EKF,%.2f,%.2f,%.2f\n",
+                       imu_dual_data.comp_roll, imu_dual_data.comp_pitch,
+                       imu_dual_data.ekf_roll, imu_dual_data.ekf_pitch, imu_dual_data.ekf_yaw);
+    if (len > 0)
+    {
+        imu_host_send(buf);
+    }
+}
+
+// 默认的上位机发送函数（弱实现）。工程中可自行实现同名函数将数据通过串口/USB等发送。
+// 提供一个空实现以保证链接通过。
+void imu_host_send(const char *msg)
+{
+    (void)msg; // 默认不输出，用户可在工程中实现覆盖此函数
+}
+
+/*********************************************************************************************************************
  * @brief       计算姿态角（自动选择算法）
  * @param       void
  * @return      void
@@ -253,6 +347,13 @@ void imu_calculate_attitude(void)
     if (imu_algorithm_select == IMU_ALGORITHM_EKF)
     {
         imu_calculate_attitude_ekf(); // 使用EKF算法
+    }
+    else if (imu_algorithm_select == 2)
+    {
+        // 双算法测试模式：同时运行互补滤波和EKF，并发送结果到上位机
+        imu_calculate_attitude_dual();
+        // 为兼容性，保留 imu_data 中的 EKF 或互补滤波默认输出可按需选择；
+        // 此处不修改 imu_data（上层可直接读取 imu_dual_data）
     }
     else
     {

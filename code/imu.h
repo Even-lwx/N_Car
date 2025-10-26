@@ -90,6 +90,23 @@ typedef struct
     bool data_ready;     // 数据就绪标志（中断中设置）
 } imu_data_t;
 
+/**
+ * @brief 双算法姿态数据结构体
+ * @note  用于同时存储互补滤波和EKF两种算法的解算结果
+ */
+typedef struct
+{
+    // ---------- 互补滤波结果 ----------
+    float comp_roll;   // 互补滤波 - 横滚角 (°)
+    float comp_pitch;  // 互补滤波 - 俯仰角 (°)
+    float comp_yaw;    // 互补滤波 - 偏航角 (°)
+
+    // ---------- EKF滤波结果 ----------
+    float ekf_roll;    // EKF - 横滚角 (°)
+    float ekf_pitch;   // EKF - 俯仰角 (°)
+    float ekf_yaw;     // EKF - 偏航角 (°)
+} imu_dual_data_t;
+
 // *************************** 全局变量声明 ***************************
 
 /**
@@ -99,8 +116,14 @@ typedef struct
 extern imu_data_t imu_data;
 
 /**
+ * @brief 双算法姿态数据全局实例
+ * @note  用于测试模式，同时保存两种算法的解算结果
+ */
+extern imu_dual_data_t imu_dual_data;
+
+/**
  * @brief IMU算法选择变量
- * @note  0 = 一阶互补滤波（默认），1 = EKF扩展卡尔曼滤波
+ * @note  0 = 一阶互补滤波（默认），1 = EKF扩展卡尔曼滤波，2 = 双算法同时运行（测试模式）
  *        修改此值后需重新编译
  */
 extern uint8 imu_algorithm_select;
@@ -200,5 +223,22 @@ float imu_get_pitch(void);
  * @example     float yaw = imu_get_yaw();
  */
 float imu_get_yaw(void);
+
+/**
+ * @brief       双算法同时解算姿态角（测试模式）
+ * @param       void
+ * @return      void
+ * @note        同时运行互补滤波和EKF两种算法，结果存储在imu_dual_data中
+ *              用于对比测试两种算法的性能差异
+ * @example     imu_calculate_attitude_dual();
+ */
+void imu_calculate_attitude_dual(void);
+
+/**
+ * @brief       上位机发送回调
+ * @param       msg  要发送的字符串（以"\n"结尾）
+ * @note        默认库提供空实现，工程中可实现同名函数将数据通过串口或其他方式发出
+ */
+void imu_host_send(const char *msg);
 
 #endif // IMU_H
