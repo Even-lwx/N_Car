@@ -65,7 +65,7 @@ void IMU_QuaternionEKF_Init(float process_noise1, float process_noise2, float me
     QEKF_INS.ErrorCount = 0;
     QEKF_INS.UpdateCount = 0;
     QEKF_INS.dt = dt;
-    QEKF_INS.accLPFcoef = 0.1;
+    QEKF_INS.accLPFcoef = lpf;  // 使用传入的低通滤波系数（原来硬编码为0.1）
 
     if (lambda > 1)
     {
